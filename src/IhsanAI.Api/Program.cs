@@ -1,6 +1,7 @@
 using Serilog;
 using IhsanAI.Api.Middleware;
 using IhsanAI.Api.Extensions;
+using IhsanAI.Api.Endpoints;
 using IhsanAI.Application;
 using IhsanAI.Infrastructure;
 
@@ -44,6 +45,9 @@ app.UseAuthorization();
 // Map endpoints
 app.MapGet("/", () => Results.Ok(new { Message = "IhsanAI API is running", Version = "1.0.0" }));
 app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));
+
+// Map API endpoints
+app.MapApiEndpoints();
 
 try
 {

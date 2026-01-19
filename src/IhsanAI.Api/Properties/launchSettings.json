@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "IhsanAI.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:36100;http://localhost:36101"
+    }
+  }
+}
