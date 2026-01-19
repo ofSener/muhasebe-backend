@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!-- Package Versions Reference -->
+  <!--
+    MediatR: 12.2.0
+    FluentValidation: 11.9.0
+    AutoMapper: 13.0.1
+    EntityFrameworkCore: 9.0.0
+    Pomelo.EntityFrameworkCore.MySql: 9.0.0
+    Serilog.AspNetCore: 8.0.0
+    Swashbuckle.AspNetCore: 6.5.0
+    JwtBearer: 9.0.0
+  -->
+</Project>
