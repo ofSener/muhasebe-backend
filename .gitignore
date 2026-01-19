@@ -46,10 +46,6 @@ Thumbs.db
 # User-specific files
 appsettings.*.local.json
 
-# Sensitive config files (contain passwords)
-appsettings.json
-appsettings.Development.json
-appsettings.Production.json
 
 # Logs
 logs/
