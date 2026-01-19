@@ -1,13 +1,13 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
-using IhsanAI.Domain.Entities;
+using IhsanAI.Application.DTOs;
 
 namespace IhsanAI.Application.Features.Kullanicilar.Queries;
 
-public record GetKullanicilarQuery(int? FirmaId = null, int? Limit = 100) : IRequest<List<Kullanici>>;
+public record GetKullanicilarQuery(int? FirmaId = null, int? Limit = 100) : IRequest<List<KullaniciListDto>>;
 
-public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery, List<Kullanici>>
+public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery, List<KullaniciListDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -16,7 +16,7 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         _context = context;
     }
 
-    public async Task<List<Kullanici>> Handle(GetKullanicilarQuery request, CancellationToken cancellationToken)
+    public async Task<List<KullaniciListDto>> Handle(GetKullanicilarQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Kullanicilar.AsQueryable();
 
@@ -28,14 +28,25 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         return await query
             .OrderByDescending(x => x.KayitTarihi)
             .Take(request.Limit ?? 100)
+            .Select(x => new KullaniciListDto
+            {
+                Id = x.Id,
+                Adi = x.Adi,
+                Soyadi = x.Soyadi,
+                Email = x.Email,
+                GsmNo = x.GsmNo,
+                KullaniciTuru = x.KullaniciTuru,
+                Onay = x.Onay,
+                KayitTarihi = x.KayitTarihi
+            })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 }
 
-public record GetKullaniciByIdQuery(int Id) : IRequest<Kullanici?>;
+public record GetKullaniciByIdQuery(int Id) : IRequest<KullaniciDto?>;
 
-public class GetKullaniciByIdQueryHandler : IRequestHandler<GetKullaniciByIdQuery, Kullanici?>
+public class GetKullaniciByIdQueryHandler : IRequestHandler<GetKullaniciByIdQuery, KullaniciDto?>
 {
     private readonly IApplicationDbContext _context;
 
@@ -44,10 +55,30 @@ public class GetKullaniciByIdQueryHandler : IRequestHandler<GetKullaniciByIdQuer
         _context = context;
     }
 
-    public async Task<Kullanici?> Handle(GetKullaniciByIdQuery request, CancellationToken cancellationToken)
+    public async Task<KullaniciDto?> Handle(GetKullaniciByIdQuery request, CancellationToken cancellationToken)
     {
         return await _context.Kullanicilar
+            .Where(x => x.Id == request.Id)
+            .Select(x => new KullaniciDto
+            {
+                Id = x.Id,
+                FirmaId = x.FirmaId,
+                SubeId = x.SubeId,
+                YetkiId = x.YetkiId,
+                KullaniciTuru = x.KullaniciTuru,
+                Adi = x.Adi,
+                Soyadi = x.Soyadi,
+                Email = x.Email,
+                GsmNo = x.GsmNo,
+                SabitTel = x.SabitTel,
+                Onay = x.Onay,
+                AnaYoneticimi = x.AnaYoneticimi,
+                KayitTarihi = x.KayitTarihi,
+                GuncellemeTarihi = x.GuncellemeTarihi,
+                SonGirisZamani = x.SonGirisZamani,
+                ProfilYolu = x.ProfilYolu
+            })
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }

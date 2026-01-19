@@ -8,7 +8,8 @@ public static class FirmalarEndpoints
     public static IEndpointRouteBuilder MapFirmalarEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/firmalar")
-            .WithTags("Firmalar");
+            .WithTags("Firmalar")
+            .RequireAuthorization();
 
         group.MapGet("/", async (bool? sadeceOnaylananlar, IMediator mediator) =>
         {

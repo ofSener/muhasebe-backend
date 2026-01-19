@@ -8,7 +8,8 @@ public static class AcenteKodlariEndpoints
     public static IEndpointRouteBuilder MapAcenteKodlariEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/acente-kodlari")
-            .WithTags("Acente Kodlari");
+            .WithTags("Acente Kodlari")
+            .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, IMediator mediator) =>
         {
