@@ -4,6 +4,9 @@ public static class EndpointExtensions
 {
     public static IEndpointRouteBuilder MapApiEndpoints(this IEndpointRouteBuilder app)
     {
+        // Auth endpoints (must be first, no auth required for login)
+        app.MapAuthEndpoints();
+
         app.MapYakalananPolicelerEndpoints();
         app.MapPolicelerEndpoints();
         app.MapPoliceHavuzlariEndpoints();
