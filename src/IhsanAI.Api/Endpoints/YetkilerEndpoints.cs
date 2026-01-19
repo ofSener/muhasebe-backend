@@ -8,7 +8,8 @@ public static class YetkilerEndpoints
     public static IEndpointRouteBuilder MapYetkilerEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/yetkiler")
-            .WithTags("Yetkiler");
+            .WithTags("Yetkiler")
+            .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, IMediator mediator) =>
         {

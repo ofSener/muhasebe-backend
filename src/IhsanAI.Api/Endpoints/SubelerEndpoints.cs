@@ -8,7 +8,8 @@ public static class SubelerEndpoints
     public static IEndpointRouteBuilder MapSubelerEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/subeler")
-            .WithTags("Subeler");
+            .WithTags("Subeler")
+            .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, IMediator mediator) =>
         {

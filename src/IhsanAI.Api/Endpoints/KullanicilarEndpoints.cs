@@ -8,7 +8,8 @@ public static class KullanicilarEndpoints
     public static IEndpointRouteBuilder MapKullanicilarEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/kullanicilar")
-            .WithTags("Kullanicilar");
+            .WithTags("Kullanicilar")
+            .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, int? limit, IMediator mediator) =>
         {

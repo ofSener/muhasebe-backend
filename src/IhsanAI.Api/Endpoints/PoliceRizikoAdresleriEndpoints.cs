@@ -8,7 +8,8 @@ public static class PoliceRizikoAdresleriEndpoints
     public static IEndpointRouteBuilder MapPoliceRizikoAdresleriEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/police-riziko-adresleri")
-            .WithTags("Police Riziko Adresleri");
+            .WithTags("Police Riziko Adresleri")
+            .RequireAuthorization();
 
         group.MapGet("/", async (int? policeId, IMediator mediator) =>
         {
