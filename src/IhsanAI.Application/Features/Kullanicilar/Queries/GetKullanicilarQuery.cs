@@ -82,3 +82,57 @@ public class GetKullaniciByIdQueryHandler : IRequestHandler<GetKullaniciByIdQuer
             .FirstOrDefaultAsync(cancellationToken);
     }
 }
+
+public record ProducerSearchDto
+{
+    public int Id { get; init; }
+    public string? Adi { get; init; }
+    public string? Soyadi { get; init; }
+    public string? Email { get; init; }
+    public string? GsmNo { get; init; }
+}
+
+public record SearchProducersQuery(string Name, int? FirmaId = null, int Limit = 20) : IRequest<List<ProducerSearchDto>>;
+
+public class SearchProducersQueryHandler : IRequestHandler<SearchProducersQuery, List<ProducerSearchDto>>
+{
+    private readonly IApplicationDbContext _context;
+
+    public SearchProducersQueryHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<ProducerSearchDto>> Handle(SearchProducersQuery request, CancellationToken cancellationToken)
+    {
+        var query = _context.Kullanicilar.AsQueryable();
+
+        if (request.FirmaId.HasValue)
+        {
+            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            var searchTerm = request.Name.ToLower();
+            query = query.Where(x =>
+                (x.Adi != null && x.Adi.ToLower().Contains(searchTerm)) ||
+                (x.Soyadi != null && x.Soyadi.ToLower().Contains(searchTerm)));
+        }
+
+        return await query
+            .OrderBy(x => x.Adi)
+            .ThenBy(x => x.Soyadi)
+            .Take(request.Limit)
+            .Select(x => new ProducerSearchDto
+            {
+                Id = x.Id,
+                Adi = x.Adi,
+                Soyadi = x.Soyadi,
+                Email = x.Email,
+                GsmNo = x.GsmNo
+            })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+}

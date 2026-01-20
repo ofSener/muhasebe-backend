@@ -27,6 +27,14 @@ public static class KullanicilarEndpoints
         .WithName("GetKullaniciById")
         .WithDescription("ID'ye göre kullanıcı getirir");
 
+        group.MapGet("/search", async (string name, int? firmaId, int? limit, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new SearchProducersQuery(name, firmaId, limit ?? 20));
+            return Results.Ok(result);
+        })
+        .WithName("SearchProducers")
+        .WithDescription("Üretici/çalışan arama");
+
         return app;
     }
 }
