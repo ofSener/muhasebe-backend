@@ -28,16 +28,24 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         return await query
             .OrderByDescending(x => x.KayitTarihi)
             .Take(request.Limit ?? 100)
+            .GroupJoin(
+                _context.Yetkiler,
+                k => k.MuhasebeYetkiId,
+                y => y.Id,
+                (k, yetkiler) => new { k, yetki = yetkiler.FirstOrDefault() })
             .Select(x => new KullaniciListDto
             {
-                Id = x.Id,
-                Adi = x.Adi,
-                Soyadi = x.Soyadi,
-                Email = x.Email,
-                GsmNo = x.GsmNo,
-                KullaniciTuru = x.KullaniciTuru,
-                Onay = x.Onay,
-                KayitTarihi = x.KayitTarihi
+                Id = x.k.Id,
+                Adi = x.k.Adi,
+                Soyadi = x.k.Soyadi,
+                Email = x.k.Email,
+                GsmNo = x.k.GsmNo,
+                KullaniciTuru = x.k.KullaniciTuru,
+                AnaYoneticimi = x.k.AnaYoneticimi,
+                MuhasebeYetkiId = x.k.MuhasebeYetkiId,
+                YetkiAdi = x.yetki != null ? x.yetki.YetkiAdi : null,
+                Onay = x.k.Onay,
+                KayitTarihi = x.k.KayitTarihi
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
