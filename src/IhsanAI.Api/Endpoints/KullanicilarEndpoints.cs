@@ -4,6 +4,8 @@ using IhsanAI.Application.Features.Kullanicilar.Commands;
 
 namespace IhsanAI.Api.Endpoints;
 
+public record AssignPermissionRequest(int YetkiId);
+
 public static class KullanicilarEndpoints
 {
     public static IEndpointRouteBuilder MapKullanicilarEndpoints(this IEndpointRouteBuilder app)
@@ -36,6 +38,7 @@ public static class KullanicilarEndpoints
         .WithName("SearchProducers")
         .WithDescription("Üretici/çalışan arama");
 
+<<<<<<< HEAD
         group.MapPut("/{id:int}/yetki", async (int id, UpdateYetkiRequest request, IMediator mediator) =>
         {
             var result = await mediator.Send(new UpdateKullaniciYetkiCommand(id, request.MuhasebeYetkiId));
@@ -43,6 +46,23 @@ public static class KullanicilarEndpoints
         })
         .WithName("UpdateKullaniciYetki")
         .WithDescription("Kullanıcının yetkisini günceller");
+=======
+        group.MapPut("/{id:int}/permission", async (int id, AssignPermissionRequest request, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new AssignPermissionCommand(id, request.YetkiId));
+            return result ? Results.Ok(new { success = true, message = "Yetki başarıyla atandı" }) : Results.NotFound();
+        })
+        .WithName("AssignPermission")
+        .WithDescription("Kullanıcıya yetki atar");
+
+        group.MapDelete("/{id:int}/permission", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new RemovePermissionCommand(id));
+            return result ? Results.Ok(new { success = true, message = "Yetki başarıyla kaldırıldı" }) : Results.NotFound();
+        })
+        .WithName("RemovePermission")
+        .WithDescription("Kullanıcının yetkisini kaldırır");
+>>>>>>> 05de29821aab3cdd2f39eff37d7411d3656d3f18
 
         return app;
     }

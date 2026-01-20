@@ -31,6 +31,7 @@ public record UserDto
     public string Role { get; init; } = string.Empty;
     public int? FirmaId { get; init; }
     public int? SubeId { get; init; }
+    public string? SubeAdi { get; init; }
     public string? ProfilResmi { get; init; }
     public PermissionsDto? Permissions { get; init; }
 }
@@ -102,6 +103,11 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             ? await _context.Yetkiler.FirstOrDefaultAsync(y => y.Id == kullanici.MuhasebeYetkiId, cancellationToken)
             : null;
 
+        // Get branch name
+        var sube = kullanici.SubeId.HasValue
+            ? await _context.Subeler.FirstOrDefaultAsync(s => s.Id == kullanici.SubeId, cancellationToken)
+            : null;
+
         // Determine role based on permissions
         var role = DetermineRole(yetki);
 
@@ -110,7 +116,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         var secretKey = jwtSettings["SecretKey"] ?? "IhsanAI-Default-Secret-Key-For-Development-Only-32chars";
         var issuer = jwtSettings["Issuer"] ?? "IhsanAI";
         var audience = jwtSettings["Audience"] ?? "IhsanAI";
-        var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "60");
+        var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "120"); // Default 2 saat
 
         var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
         var refreshToken = GenerateRefreshToken();
@@ -139,6 +145,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
                 Role = role,
                 FirmaId = kullanici.FirmaId,
                 SubeId = kullanici.SubeId,
+                SubeAdi = sube?.SubeAdi,
                 ProfilResmi = kullanici.ProfilYolu,
                 Permissions = yetki != null ? new PermissionsDto
                 {
@@ -202,6 +209,11 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
             claims.Add(new Claim("policeDuzenleyebilsin", yetki.PoliceDuzenleyebilsin ?? "0"));
             claims.Add(new Claim("policeHavuzunuGorebilsin", yetki.PoliceHavuzunuGorebilsin ?? "0"));
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", yetki.YetkilerSayfasindaIslemYapabilsin ?? "0"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", yetki.AcenteliklerSayfasindaIslemYapabilsin ?? "0"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", yetki.KomisyonOranlariniDuzenleyebilsin ?? "0"));
+            claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
+            claims.Add(new Claim("policeAktarabilsin", yetki.PoliceAktarabilsin ?? "0"));
         }
 
         var token = new JwtSecurityToken(
