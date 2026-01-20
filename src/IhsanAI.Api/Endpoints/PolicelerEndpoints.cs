@@ -1,5 +1,6 @@
 using MediatR;
 using IhsanAI.Application.Features.Policeler.Queries;
+using IhsanAI.Application.Features.Policeler.Commands;
 
 namespace IhsanAI.Api.Endpoints;
 
@@ -26,6 +27,30 @@ public static class PolicelerEndpoints
         })
         .WithName("GetPoliceById")
         .WithDescription("ID'ye göre poliçe getirir");
+
+        group.MapPut("/batch-update", async (BatchUpdatePoliciesCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(result);
+        })
+        .WithName("BatchUpdatePolicies")
+        .WithDescription("Toplu poliçe güncelleme");
+
+        group.MapPost("/{id:int}/send-to-pool", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new SendPolicyToPoolCommand(id));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("SendPolicyToPool")
+        .WithDescription("Tek poliçeyi havuza gönderir");
+
+        group.MapPost("/batch-send-to-pool", async (BatchSendPoliciesToPoolCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(result);
+        })
+        .WithName("BatchSendPoliciesToPool")
+        .WithDescription("Toplu poliçe havuza gönderme");
 
         return app;
     }
