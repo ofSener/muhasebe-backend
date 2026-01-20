@@ -7,8 +7,8 @@ public static class MusterilerEndpoints
 {
     public static IEndpointRouteBuilder MapMusterilerEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/musteriler")
-            .WithTags("Musteriler")
+        var group = app.MapGroup("/api/customers")
+            .WithTags("Customers")
             .RequireAuthorization();
 
         group.MapGet("/", async (int? ekleyenFirmaId, int? limit, IMediator mediator) =>

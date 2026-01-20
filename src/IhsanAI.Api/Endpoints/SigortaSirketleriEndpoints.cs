@@ -7,8 +7,8 @@ public static class SigortaSirketleriEndpoints
 {
     public static IEndpointRouteBuilder MapSigortaSirketleriEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/sigorta-sirketleri")
-            .WithTags("Sigorta Sirketleri")
+        var group = app.MapGroup("/api/insurance-companies")
+            .WithTags("Insurance Companies")
             .RequireAuthorization();
 
         group.MapGet("/", async (bool? sadeceFaal, IMediator mediator) =>

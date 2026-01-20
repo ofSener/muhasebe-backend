@@ -19,7 +19,8 @@ public static class AuthEndpoints
 
             if (!result.Success)
             {
-                return Results.Unauthorized();
+                // 401 ile birlikte hata mesajını da döndür
+                return Results.Json(new { success = false, error = result.Message }, statusCode: 401);
             }
 
             return Results.Ok(result);

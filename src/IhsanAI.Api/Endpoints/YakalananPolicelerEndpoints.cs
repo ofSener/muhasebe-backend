@@ -7,8 +7,8 @@ public static class YakalananPolicelerEndpoints
 {
     public static IEndpointRouteBuilder MapYakalananPolicelerEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/yakalanan-policeler")
-            .WithTags("Yakalanan Policeler")
+        var group = app.MapGroup("/api/policies/captured")
+            .WithTags("Captured Policies")
             .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, int? limit, IMediator mediator) =>

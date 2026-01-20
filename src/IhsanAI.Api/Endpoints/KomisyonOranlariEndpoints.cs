@@ -7,8 +7,8 @@ public static class KomisyonOranlariEndpoints
 {
     public static IEndpointRouteBuilder MapKomisyonOranlariEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/komisyon-oranlari")
-            .WithTags("Komisyon Oranlari")
+        var group = app.MapGroup("/api/commission-rates")
+            .WithTags("Commission Rates")
             .RequireAuthorization();
 
         group.MapGet("/", async (int? firmaId, IMediator mediator) =>
