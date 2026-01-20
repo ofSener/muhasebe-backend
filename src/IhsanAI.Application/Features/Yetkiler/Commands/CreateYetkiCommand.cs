@@ -19,7 +19,18 @@ public record CreateYetkiCommand(
     string? YetkilerSayfasindaIslemYapabilsin,
     string? AcenteliklerSayfasindaIslemYapabilsin,
     string? KomisyonOranlariniDuzenleyebilsin,
-    string? AcenteliklereGorePoliceYakalansin
+    string? AcenteliklereGorePoliceYakalansin,
+    string? MusterileriGorebilsin,
+    string? FinansSayfasiniGorebilsin,
+    // Müşterilerimiz Alt Yetkileri
+    string? MusteriListesiGorebilsin,
+    string? MusteriDetayGorebilsin,
+    string? YenilemeTakibiGorebilsin,
+    // Finans Alt Yetkileri
+    string? FinansDashboardGorebilsin,
+    string? PoliceOdemeleriGorebilsin,
+    string? TahsilatTakibiGorebilsin,
+    string? FinansRaporlariGorebilsin
 ) : IRequest<Yetki>;
 
 public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yetki>
@@ -62,6 +73,17 @@ public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yet
             AcenteliklerSayfasindaIslemYapabilsin = request.AcenteliklerSayfasindaIslemYapabilsin,
             KomisyonOranlariniDuzenleyebilsin = request.KomisyonOranlariniDuzenleyebilsin,
             AcenteliklereGorePoliceYakalansin = request.AcenteliklereGorePoliceYakalansin,
+            MusterileriGorebilsin = request.MusterileriGorebilsin,
+            FinansSayfasiniGorebilsin = request.FinansSayfasiniGorebilsin,
+            // Müşterilerimiz Alt Yetkileri
+            MusteriListesiGorebilsin = request.MusteriListesiGorebilsin,
+            MusteriDetayGorebilsin = request.MusteriDetayGorebilsin,
+            YenilemeTakibiGorebilsin = request.YenilemeTakibiGorebilsin,
+            // Finans Alt Yetkileri
+            FinansDashboardGorebilsin = request.FinansDashboardGorebilsin,
+            PoliceOdemeleriGorebilsin = request.PoliceOdemeleriGorebilsin,
+            TahsilatTakibiGorebilsin = request.TahsilatTakibiGorebilsin,
+            FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin,
             KayitTarihi = _dateTimeService.Now,
             GuncellemeTarihi = _dateTimeService.Now
         };

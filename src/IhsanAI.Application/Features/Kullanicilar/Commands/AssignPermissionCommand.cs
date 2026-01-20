@@ -55,6 +55,12 @@ public class AssignPermissionCommandHandler : IRequestHandler<AssignPermissionCo
         kullanici.MuhasebeYetkiId = request.YetkiId;
         kullanici.GuncellemeTarihi = _dateTimeService.Now;
 
+        // Kullanıcının token'ını geçersiz kıl - yeniden giriş yapması gerekecek
+        kullanici.Token = null;
+        kullanici.TokenExpiry = null;
+        kullanici.RefreshToken = null;
+        kullanici.RefreshTokenExpiry = null;
+
         await _context.SaveChangesAsync(cancellationToken);
 
         return true;
@@ -96,6 +102,12 @@ public class RemovePermissionCommandHandler : IRequestHandler<RemovePermissionCo
         // Yetkiyi kaldir
         kullanici.MuhasebeYetkiId = null;
         kullanici.GuncellemeTarihi = _dateTimeService.Now;
+
+        // Kullanıcının token'ını geçersiz kıl - yeniden giriş yapması gerekecek
+        kullanici.Token = null;
+        kullanici.TokenExpiry = null;
+        kullanici.RefreshToken = null;
+        kullanici.RefreshTokenExpiry = null;
 
         await _context.SaveChangesAsync(cancellationToken);
 

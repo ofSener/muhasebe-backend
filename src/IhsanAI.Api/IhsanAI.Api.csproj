@@ -8,11 +8,6 @@
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
   </PropertyGroup>
 
-  <!-- Update web.config copy behavior (not Include, use Update to avoid duplicate) -->
-  <ItemGroup>
-    <Content Update="web.config" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />

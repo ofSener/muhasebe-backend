@@ -69,4 +69,42 @@ public class Yetki
     [Column("AcenteliklereGorePoliceYakalansin")]
     [MaxLength(1)]
     public string? AcenteliklereGorePoliceYakalansin { get; set; }
+
+    [Column("MusterileriGorebilsin")]
+    [MaxLength(1)]
+    public string? MusterileriGorebilsin { get; set; }
+
+    [Column("FinansSayfasiniGorebilsin")]
+    [MaxLength(1)]
+    public string? FinansSayfasiniGorebilsin { get; set; }
+
+    // Müşterilerimiz Alt Yetkileri
+    [Column("MusteriListesiGorebilsin")]
+    [MaxLength(1)]
+    public string? MusteriListesiGorebilsin { get; set; }
+
+    [Column("MusteriDetayGorebilsin")]
+    [MaxLength(1)]
+    public string? MusteriDetayGorebilsin { get; set; }
+
+    [Column("YenilemeTakibiGorebilsin")]
+    [MaxLength(1)]
+    public string? YenilemeTakibiGorebilsin { get; set; }
+
+    // Finans Alt Yetkileri
+    [Column("FinansDashboardGorebilsin")]
+    [MaxLength(1)]
+    public string? FinansDashboardGorebilsin { get; set; }
+
+    [Column("PoliceOdemeleriGorebilsin")]
+    [MaxLength(1)]
+    public string? PoliceOdemeleriGorebilsin { get; set; }
+
+    [Column("TahsilatTakibiGorebilsin")]
+    [MaxLength(1)]
+    public string? TahsilatTakibiGorebilsin { get; set; }
+
+    [Column("FinansRaporlariGorebilsin")]
+    [MaxLength(1)]
+    public string? FinansRaporlariGorebilsin { get; set; }
 }
