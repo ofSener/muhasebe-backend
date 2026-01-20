@@ -27,6 +27,14 @@ public static class YakalananPolicelerEndpoints
         .WithName("GetYakalananPoliceById")
         .WithDescription("ID'ye göre yakalanan poliçe getirir");
 
+        group.MapGet("/stats", async (int? firmaId, DateTime? startDate, DateTime? endDate, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetYakalananPoliceStatsQuery(firmaId, startDate, endDate));
+            return Results.Ok(result);
+        })
+        .WithName("GetYakalananPoliceStats")
+        .WithDescription("Yakalanan poliçe istatistiklerini getirir");
+
         return app;
     }
 }
