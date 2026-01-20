@@ -25,7 +25,8 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
             query = query.Where(x => x.FirmaId == request.FirmaId.Value);
         }
 
-        return await query
+        // Önce kullanıcıları al
+        var kullanicilar = await query
             .OrderByDescending(x => x.KayitTarihi)
             .Take(request.Limit ?? 100)
             .GroupJoin(
@@ -33,22 +34,52 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
                 k => k.MuhasebeYetkiId,
                 y => y.Id,
                 (k, yetkiler) => new { k, yetki = yetkiler.FirstOrDefault() })
-            .Select(x => new KullaniciListDto
+            .Select(x => new
             {
-                Id = x.k.Id,
-                Adi = x.k.Adi,
-                Soyadi = x.k.Soyadi,
-                Email = x.k.Email,
-                GsmNo = x.k.GsmNo,
-                KullaniciTuru = x.k.KullaniciTuru,
-                AnaYoneticimi = x.k.AnaYoneticimi,
-                MuhasebeYetkiId = x.k.MuhasebeYetkiId,
+                x.k.Id,
+                x.k.Adi,
+                x.k.Soyadi,
+                x.k.Email,
+                x.k.GsmNo,
+                x.k.KullaniciTuru,
+                x.k.AnaYoneticimi,
+                x.k.MuhasebeYetkiId,
                 YetkiAdi = x.yetki != null ? x.yetki.YetkiAdi : null,
-                Onay = x.k.Onay,
-                KayitTarihi = x.k.KayitTarihi
+                x.k.Onay,
+                x.k.KayitTarihi
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        // Kullanıcı ID'lerini al
+        var kullaniciIds = kullanicilar.Select(k => k.Id).ToList();
+
+        // Her kullanıcı için poliçe sayısını al
+        var policeSayilari = await _context.YakalananPoliceler
+            .Where(p => kullaniciIds.Contains(p.ProduktorId))
+            .GroupBy(p => p.ProduktorId)
+            .Select(g => new { ProduktorId = g.Key, Sayi = g.Count() })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var policeSayilariDict = policeSayilari.ToDictionary(x => x.ProduktorId, x => x.Sayi);
+
+        // Sonuçları birleştir
+        return kullanicilar.Select(k => new KullaniciListDto
+        {
+            Id = k.Id,
+            Adi = k.Adi,
+            Soyadi = k.Soyadi,
+            Email = k.Email,
+            GsmNo = k.GsmNo,
+            KullaniciTuru = k.KullaniciTuru,
+            AnaYoneticimi = k.AnaYoneticimi,
+            MuhasebeYetkiId = k.MuhasebeYetkiId,
+            YetkiAdi = k.YetkiAdi,
+            Onay = k.Onay,
+            KayitTarihi = k.KayitTarihi,
+            PoliceSayisi = policeSayilariDict.GetValueOrDefault(k.Id, 0)
+        }).ToList();
     }
 }
 

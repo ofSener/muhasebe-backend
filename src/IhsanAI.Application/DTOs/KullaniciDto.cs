@@ -37,6 +37,7 @@ public record KullaniciListDto
     public string? YetkiAdi { get; init; }
     public sbyte? Onay { get; init; }
     public DateTime? KayitTarihi { get; init; }
+    public int PoliceSayisi { get; init; }
 
     public string AdSoyad => $"{Adi} {Soyadi}".Trim();
     public bool Aktif => Onay == 1;
