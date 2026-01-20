@@ -19,7 +19,18 @@ public record UpdateYetkiCommand(
     string? YetkilerSayfasindaIslemYapabilsin,
     string? AcenteliklerSayfasindaIslemYapabilsin,
     string? KomisyonOranlariniDuzenleyebilsin,
-    string? AcenteliklereGorePoliceYakalansin
+    string? AcenteliklereGorePoliceYakalansin,
+    string? MusterileriGorebilsin,
+    string? FinansSayfasiniGorebilsin,
+    // Müşterilerimiz Alt Yetkileri
+    string? MusteriListesiGorebilsin,
+    string? MusteriDetayGorebilsin,
+    string? YenilemeTakibiGorebilsin,
+    // Finans Alt Yetkileri
+    string? FinansDashboardGorebilsin,
+    string? PoliceOdemeleriGorebilsin,
+    string? TahsilatTakibiGorebilsin,
+    string? FinansRaporlariGorebilsin
 ) : IRequest<Yetki?>;
 
 public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yetki?>
@@ -89,9 +100,57 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
         if (request.AcenteliklereGorePoliceYakalansin != null)
             yetki.AcenteliklereGorePoliceYakalansin = request.AcenteliklereGorePoliceYakalansin;
 
+        if (request.MusterileriGorebilsin != null)
+            yetki.MusterileriGorebilsin = request.MusterileriGorebilsin;
+
+        if (request.FinansSayfasiniGorebilsin != null)
+            yetki.FinansSayfasiniGorebilsin = request.FinansSayfasiniGorebilsin;
+
+        // Müşterilerimiz Alt Yetkileri
+        if (request.MusteriListesiGorebilsin != null)
+            yetki.MusteriListesiGorebilsin = request.MusteriListesiGorebilsin;
+
+        if (request.MusteriDetayGorebilsin != null)
+            yetki.MusteriDetayGorebilsin = request.MusteriDetayGorebilsin;
+
+        if (request.YenilemeTakibiGorebilsin != null)
+            yetki.YenilemeTakibiGorebilsin = request.YenilemeTakibiGorebilsin;
+
+        // Finans Alt Yetkileri
+        if (request.FinansDashboardGorebilsin != null)
+            yetki.FinansDashboardGorebilsin = request.FinansDashboardGorebilsin;
+
+        if (request.PoliceOdemeleriGorebilsin != null)
+            yetki.PoliceOdemeleriGorebilsin = request.PoliceOdemeleriGorebilsin;
+
+        if (request.TahsilatTakibiGorebilsin != null)
+            yetki.TahsilatTakibiGorebilsin = request.TahsilatTakibiGorebilsin;
+
+        if (request.FinansRaporlariGorebilsin != null)
+            yetki.FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin;
+
         yetki.GuncellemeTarihi = _dateTimeService.Now;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Bu yetkiye sahip tüm kullanıcıların token'larını geçersiz kıl
+        // Böylece yeniden giriş yapmaları gerekir ve yeni yetkiler uygulanır
+        var affectedUsers = await _context.Kullanicilar
+            .Where(k => k.MuhasebeYetkiId == request.Id && k.Token != null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var user in affectedUsers)
+        {
+            user.Token = null;
+            user.TokenExpiry = null;
+            user.RefreshToken = null;
+            user.RefreshTokenExpiry = null;
+        }
+
+        if (affectedUsers.Any())
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
 
         return yetki;
     }
