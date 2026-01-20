@@ -35,11 +35,12 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// CORS must be FIRST
+app.UseCors("AllowAll");
+
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-// CORS must be before other middleware
-app.UseCors("AllowAll");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -80,9 +80,10 @@ public static class ServiceCollectionExtensions
             options.AddPolicy("AllowAll", builder =>
             {
                 builder
-                    .AllowAnyOrigin()
+                    .SetIsOriginAllowed(_ => true) // Allow any origin including null (file://)
                     .AllowAnyMethod()
-                    .AllowAnyHeader();
+                    .AllowAnyHeader()
+                    .AllowCredentials();
             });
         });
 
