@@ -9,7 +9,7 @@ public static class PoliceHavuzlariEndpoints
     {
         var group = app.MapGroup("/api/policies/pool")
             .WithTags("Policy Pool")
-            .RequireAuthorization();
+            .RequireAuthorization("CanViewPool");
 
         group.MapGet("/", async (int? isOrtagiFirmaId, int? limit, IMediator mediator) =>
         {

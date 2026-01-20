@@ -72,7 +72,8 @@ public static class ServiceCollectionExtensions
             };
         });
 
-        services.AddAuthorization();
+        // Authorization with permission policies
+        services.AddPermissionPolicies();
 
         // Configure CORS
         services.AddCors(options =>
