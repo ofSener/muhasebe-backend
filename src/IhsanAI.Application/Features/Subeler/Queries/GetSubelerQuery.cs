@@ -51,3 +51,55 @@ public class GetSubeByIdQueryHandler : IRequestHandler<GetSubeByIdQuery, Sube?>
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
     }
 }
+
+public record BranchSearchDto
+{
+    public int Id { get; init; }
+    public string? SubeAdi { get; init; }
+    public string? IlIlce { get; init; }
+    public string? YetkiliAdiSoyadi { get; init; }
+}
+
+public record SearchBranchesQuery(string Name, int? FirmaId = null, int Limit = 20) : IRequest<List<BranchSearchDto>>;
+
+public class SearchBranchesQueryHandler : IRequestHandler<SearchBranchesQuery, List<BranchSearchDto>>
+{
+    private readonly IApplicationDbContext _context;
+
+    public SearchBranchesQueryHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<BranchSearchDto>> Handle(SearchBranchesQuery request, CancellationToken cancellationToken)
+    {
+        var query = _context.Subeler.AsQueryable();
+
+        if (request.FirmaId.HasValue)
+        {
+            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+        }
+
+        query = query.Where(x => x.Silinmismi != 1);
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            var searchTerm = request.Name.ToLower();
+            query = query.Where(x =>
+                x.SubeAdi != null && x.SubeAdi.ToLower().Contains(searchTerm));
+        }
+
+        return await query
+            .OrderBy(x => x.SubeAdi)
+            .Take(request.Limit)
+            .Select(x => new BranchSearchDto
+            {
+                Id = x.Id,
+                SubeAdi = x.SubeAdi,
+                IlIlce = x.IlIlce,
+                YetkiliAdiSoyadi = x.YetkiliAdiSoyadi
+            })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+}

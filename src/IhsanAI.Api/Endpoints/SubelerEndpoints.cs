@@ -27,6 +27,14 @@ public static class SubelerEndpoints
         .WithName("GetSubeById")
         .WithDescription("ID'ye göre şube getirir");
 
+        group.MapGet("/search", async (string name, int? firmaId, int? limit, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new SearchBranchesQuery(name, firmaId, limit ?? 20));
+            return Results.Ok(result);
+        })
+        .WithName("SearchBranches")
+        .WithDescription("Şube arama");
+
         return app;
     }
 }
