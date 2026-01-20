@@ -1,5 +1,6 @@
 using MediatR;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.Common.Exceptions;
 using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.Yetkiler.Commands;
@@ -25,15 +26,26 @@ public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yet
 {
     private readonly IApplicationDbContext _context;
     private readonly IDateTimeService _dateTimeService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CreateYetkiCommandHandler(IApplicationDbContext context, IDateTimeService dateTimeService)
+    public CreateYetkiCommandHandler(
+        IApplicationDbContext context,
+        IDateTimeService dateTimeService,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _dateTimeService = dateTimeService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Yetki> Handle(CreateYetkiCommand request, CancellationToken cancellationToken)
     {
+        // Firma doğrulaması: Kullanıcı sadece kendi firmasının yetkisini oluşturabilir
+        if (_currentUserService.FirmaId.HasValue && request.FirmaId != _currentUserService.FirmaId.Value)
+        {
+            throw new ForbiddenAccessException("Bu firma için yetki oluşturma yetkiniz yok.");
+        }
+
         var yetki = new Yetki
         {
             FirmaId = request.FirmaId,

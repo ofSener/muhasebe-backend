@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.Common.Exceptions;
 using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.Yetkiler.Commands;
@@ -25,11 +26,16 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
 {
     private readonly IApplicationDbContext _context;
     private readonly IDateTimeService _dateTimeService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public UpdateYetkiCommandHandler(IApplicationDbContext context, IDateTimeService dateTimeService)
+    public UpdateYetkiCommandHandler(
+        IApplicationDbContext context,
+        IDateTimeService dateTimeService,
+        ICurrentUserService currentUserService)
     {
         _context = context;
         _dateTimeService = dateTimeService;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Yetki?> Handle(UpdateYetkiCommand request, CancellationToken cancellationToken)
@@ -39,6 +45,12 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
 
         if (yetki == null)
             return null;
+
+        // Firma doğrulaması: Kullanıcı sadece kendi firmasının yetkisini güncelleyebilir
+        if (_currentUserService.FirmaId.HasValue && yetki.FirmaId != _currentUserService.FirmaId.Value)
+        {
+            throw new ForbiddenAccessException("Bu firma için yetki güncelleme yetkiniz yok.");
+        }
 
         // Update fields if provided
         if (request.YetkiAdi != null)

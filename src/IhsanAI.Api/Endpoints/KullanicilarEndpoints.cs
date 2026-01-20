@@ -1,7 +1,10 @@
 using MediatR;
 using IhsanAI.Application.Features.Kullanicilar.Queries;
+using IhsanAI.Application.Features.Kullanicilar.Commands;
 
 namespace IhsanAI.Api.Endpoints;
+
+public record AssignPermissionRequest(int YetkiId);
 
 public static class KullanicilarEndpoints
 {
@@ -34,6 +37,22 @@ public static class KullanicilarEndpoints
         })
         .WithName("SearchProducers")
         .WithDescription("Üretici/çalışan arama");
+
+        group.MapPut("/{id:int}/permission", async (int id, AssignPermissionRequest request, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new AssignPermissionCommand(id, request.YetkiId));
+            return result ? Results.Ok(new { success = true, message = "Yetki başarıyla atandı" }) : Results.NotFound();
+        })
+        .WithName("AssignPermission")
+        .WithDescription("Kullanıcıya yetki atar");
+
+        group.MapDelete("/{id:int}/permission", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new RemovePermissionCommand(id));
+            return result ? Results.Ok(new { success = true, message = "Yetki başarıyla kaldırıldı" }) : Results.NotFound();
+        })
+        .WithName("RemovePermission")
+        .WithDescription("Kullanıcının yetkisini kaldırır");
 
         return app;
     }

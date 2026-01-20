@@ -36,6 +36,7 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
                 Email = x.Email,
                 GsmNo = x.GsmNo,
                 KullaniciTuru = x.KullaniciTuru,
+                MuhasebeYetkiId = x.MuhasebeYetkiId,
                 Onay = x.Onay,
                 KayitTarihi = x.KayitTarihi
             })

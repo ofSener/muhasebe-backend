@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using FluentValidation;
 using IhsanAI.Application.Common.Models;
+using IhsanAI.Application.Common.Exceptions;
 using IhsanAI.Domain.Exceptions;
 
 namespace IhsanAI.Api.Middleware;
@@ -45,6 +46,10 @@ public class ExceptionHandlingMiddleware
             DomainException domainException => (
                 HttpStatusCode.BadRequest,
                 new[] { new Error("DomainError", domainException.Message) }
+            ),
+            ForbiddenAccessException forbiddenException => (
+                HttpStatusCode.Forbidden,
+                new[] { new Error("ForbiddenAccess", forbiddenException.Message) }
             ),
             UnauthorizedAccessException => (
                 HttpStatusCode.Unauthorized,

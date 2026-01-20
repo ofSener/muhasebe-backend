@@ -32,6 +32,7 @@ public record KullaniciListDto
     public string? Email { get; init; }
     public string? GsmNo { get; init; }
     public int? KullaniciTuru { get; init; }
+    public int? MuhasebeYetkiId { get; init; }
     public sbyte? Onay { get; init; }
     public DateTime? KayitTarihi { get; init; }
 
