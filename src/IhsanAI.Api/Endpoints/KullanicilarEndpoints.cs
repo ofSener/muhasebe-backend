@@ -38,15 +38,6 @@ public static class KullanicilarEndpoints
         .WithName("SearchProducers")
         .WithDescription("Üretici/çalışan arama");
 
-<<<<<<< HEAD
-        group.MapPut("/{id:int}/yetki", async (int id, UpdateYetkiRequest request, IMediator mediator) =>
-        {
-            var result = await mediator.Send(new UpdateKullaniciYetkiCommand(id, request.MuhasebeYetkiId));
-            return result ? Results.Ok(new { success = true }) : Results.NotFound();
-        })
-        .WithName("UpdateKullaniciYetki")
-        .WithDescription("Kullanıcının yetkisini günceller");
-=======
         group.MapPut("/{id:int}/permission", async (int id, AssignPermissionRequest request, IMediator mediator) =>
         {
             var result = await mediator.Send(new AssignPermissionCommand(id, request.YetkiId));
@@ -62,7 +53,6 @@ public static class KullanicilarEndpoints
         })
         .WithName("RemovePermission")
         .WithDescription("Kullanıcının yetkisini kaldırır");
->>>>>>> 05de29821aab3cdd2f39eff37d7411d3656d3f18
 
         return app;
     }
