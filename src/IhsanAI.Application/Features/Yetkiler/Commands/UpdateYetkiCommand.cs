@@ -32,6 +32,7 @@ public record UpdateYetkiCommand(
     [property: JsonPropertyName("policeOdemeleriGorebilsin")] string? PoliceOdemeleriGorebilsin,
     [property: JsonPropertyName("tahsilatTakibiGorebilsin")] string? TahsilatTakibiGorebilsin,
     [property: JsonPropertyName("finansRaporlariGorebilsin")] string? FinansRaporlariGorebilsin,
+    [property: JsonPropertyName("kazanclarimGorebilsin")] string? KazanclarimGorebilsin,
     // Entegrasyon Yetkileri
     [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki?>;
@@ -131,6 +132,9 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
 
         if (request.FinansRaporlariGorebilsin != null)
             yetki.FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin;
+
+        if (request.KazanclarimGorebilsin != null)
+            yetki.KazanclarimGorebilsin = request.KazanclarimGorebilsin;
 
         // Entegrasyon Yetkileri
         if (request.DriveEntegrasyonuGorebilsin != null)

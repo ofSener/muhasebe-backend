@@ -32,6 +32,7 @@ public record CreateYetkiCommand(
     [property: JsonPropertyName("policeOdemeleriGorebilsin")] string? PoliceOdemeleriGorebilsin,
     [property: JsonPropertyName("tahsilatTakibiGorebilsin")] string? TahsilatTakibiGorebilsin,
     [property: JsonPropertyName("finansRaporlariGorebilsin")] string? FinansRaporlariGorebilsin,
+    [property: JsonPropertyName("kazanclarimGorebilsin")] string? KazanclarimGorebilsin,
     // Entegrasyon Yetkileri
     [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki>;
@@ -87,6 +88,7 @@ public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yet
             PoliceOdemeleriGorebilsin = request.PoliceOdemeleriGorebilsin,
             TahsilatTakibiGorebilsin = request.TahsilatTakibiGorebilsin,
             FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin,
+            KazanclarimGorebilsin = request.KazanclarimGorebilsin,
             // Entegrasyon Yetkileri
             DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin,
             KayitTarihi = _dateTimeService.Now,

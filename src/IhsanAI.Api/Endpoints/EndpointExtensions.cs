@@ -21,6 +21,7 @@ public static class EndpointExtensions
         app.MapKomisyonOranlariEndpoints();
         app.MapPoliceRizikoAdresleriEndpoints();
         app.MapPoliceSigortalilariEndpoints();
+        app.MapKazanclarEndpoints();
 
         return app;
     }

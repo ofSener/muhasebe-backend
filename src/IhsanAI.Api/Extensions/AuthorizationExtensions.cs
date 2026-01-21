@@ -31,6 +31,10 @@ public static class AuthorizationExtensions
 
             options.AddPolicy("CanViewProducers", policy =>
                 policy.RequireClaim("produktorleriGorebilsin", "1"));
+
+            // Finans yetkileri
+            options.AddPolicy("CanViewMyEarnings", policy =>
+                policy.RequireClaim("kazanclarimGorebilsin", "1"));
         });
 
         return services;

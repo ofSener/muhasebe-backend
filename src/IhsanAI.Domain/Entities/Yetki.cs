@@ -108,6 +108,10 @@ public class Yetki
     [MaxLength(1)]
     public string? FinansRaporlariGorebilsin { get; set; }
 
+    [Column("KazanclarimGorebilsin")]
+    [MaxLength(1)]
+    public string? KazanclarimGorebilsin { get; set; }
+
     // Entegrasyon Yetkileri
     [Column("DriveEntegrasyonuGorebilsin")]
     [MaxLength(1)]

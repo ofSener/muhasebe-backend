@@ -255,6 +255,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", yetki.KomisyonOranlariniDuzenleyebilsin ?? "0"));
             claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
             claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
+            claims.Add(new Claim("kazanclarimGorebilsin", yetki.KazanclarimGorebilsin ?? "0"));
         }
 
         var token = new JwtSecurityToken(
