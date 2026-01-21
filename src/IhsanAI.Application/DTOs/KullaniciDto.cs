@@ -38,7 +38,8 @@ public record KullaniciListDto
     public sbyte? Onay { get; init; }
     public DateTime? KayitTarihi { get; init; }
     public int PoliceSayisi { get; init; }
+    public bool IsEski { get; init; } // Eski (silinen) kullanıcı mı?
 
     public string AdSoyad => $"{Adi} {Soyadi}".Trim();
-    public bool Aktif => Onay == 1;
+    public bool Aktif => Onay == 1 && !IsEski;
 }

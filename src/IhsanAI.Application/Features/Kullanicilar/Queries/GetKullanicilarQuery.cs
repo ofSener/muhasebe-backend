@@ -5,7 +5,7 @@ using IhsanAI.Application.DTOs;
 
 namespace IhsanAI.Application.Features.Kullanicilar.Queries;
 
-public record GetKullanicilarQuery(int? FirmaId = null, int? Limit = 100) : IRequest<List<KullaniciListDto>>;
+public record GetKullanicilarQuery(int? FirmaId = null, int? Limit = null) : IRequest<List<KullaniciListDto>>;
 
 public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery, List<KullaniciListDto>>
 {
@@ -18,45 +18,87 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
 
     public async Task<List<KullaniciListDto>> Handle(GetKullanicilarQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.Kullanicilar.AsQueryable();
+        var result = new List<KullaniciListDto>();
+
+        // ========== AKTİF KULLANICILAR ==========
+        var aktifQuery = _context.Kullanicilar.AsQueryable();
 
         if (request.FirmaId.HasValue)
         {
-            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+            aktifQuery = aktifQuery.Where(x => x.FirmaId == request.FirmaId.Value);
         }
 
-        // Önce kullanıcıları al
-        var kullanicilar = await query
-            .OrderByDescending(x => x.KayitTarihi)
-            .Take(request.Limit ?? 100)
+        var aktifKullanicilar = await aktifQuery
             .GroupJoin(
                 _context.Yetkiler,
                 k => k.MuhasebeYetkiId,
                 y => y.Id,
                 (k, yetkiler) => new { k, yetki = yetkiler.FirstOrDefault() })
-            .Select(x => new
+            .Select(x => new KullaniciListDto
             {
-                x.k.Id,
-                x.k.Adi,
-                x.k.Soyadi,
-                x.k.Email,
-                x.k.GsmNo,
-                x.k.KullaniciTuru,
-                x.k.AnaYoneticimi,
-                x.k.MuhasebeYetkiId,
+                Id = x.k.Id,
+                Adi = x.k.Adi,
+                Soyadi = x.k.Soyadi,
+                Email = x.k.Email,
+                GsmNo = x.k.GsmNo,
+                KullaniciTuru = x.k.KullaniciTuru,
+                AnaYoneticimi = x.k.AnaYoneticimi,
+                MuhasebeYetkiId = x.k.MuhasebeYetkiId,
                 YetkiAdi = x.yetki != null ? x.yetki.YetkiAdi : null,
-                x.k.Onay,
-                x.k.KayitTarihi
+                Onay = x.k.Onay,
+                KayitTarihi = x.k.KayitTarihi,
+                IsEski = false
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Kullanıcı ID'lerini al
-        var kullaniciIds = kullanicilar.Select(k => k.Id).ToList();
+        result.AddRange(aktifKullanicilar);
 
-        // Her kullanıcı için poliçe sayısını al
+        // ========== ESKİ KULLANICILAR ==========
+        var eskiQuery = _context.KullanicilarEski.AsQueryable();
+
+        if (request.FirmaId.HasValue)
+        {
+            eskiQuery = eskiQuery.Where(x => x.FirmaId == request.FirmaId.Value);
+        }
+
+        var eskiKullanicilar = await eskiQuery
+            .Select(x => new KullaniciListDto
+            {
+                Id = x.Id,
+                Adi = x.Adi,
+                Soyadi = x.Soyadi,
+                Email = x.Email,
+                GsmNo = x.GsmNo,
+                KullaniciTuru = x.KullaniciTuru,
+                AnaYoneticimi = x.AnaYoneticimi,
+                MuhasebeYetkiId = null,
+                YetkiAdi = null,
+                Onay = 0, // Eski kullanıcılar her zaman Pasif
+                KayitTarihi = x.KayitTarihi,
+                IsEski = true
+            })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        result.AddRange(eskiKullanicilar);
+
+        // ========== SIRALA ==========
+        result = result
+            .OrderByDescending(x => x.KayitTarihi)
+            .ToList();
+
+        // Limit varsa uygula
+        if (request.Limit.HasValue)
+        {
+            result = result.Take(request.Limit.Value).ToList();
+        }
+
+        // ========== POLİÇE SAYILARINI AL ==========
+        var tumIds = result.Select(k => k.Id).ToList();
+
         var policeSayilari = await _context.YakalananPoliceler
-            .Where(p => kullaniciIds.Contains(p.ProduktorId))
+            .Where(p => tumIds.Contains(p.ProduktorId))
             .GroupBy(p => p.ProduktorId)
             .Select(g => new { ProduktorId = g.Key, Sayi = g.Count() })
             .AsNoTracking()
@@ -64,20 +106,9 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
 
         var policeSayilariDict = policeSayilari.ToDictionary(x => x.ProduktorId, x => x.Sayi);
 
-        // Sonuçları birleştir
-        return kullanicilar.Select(k => new KullaniciListDto
+        // Poliçe sayılarını ekleyerek sonuç döndür
+        return result.Select(k => k with
         {
-            Id = k.Id,
-            Adi = k.Adi,
-            Soyadi = k.Soyadi,
-            Email = k.Email,
-            GsmNo = k.GsmNo,
-            KullaniciTuru = k.KullaniciTuru,
-            AnaYoneticimi = k.AnaYoneticimi,
-            MuhasebeYetkiId = k.MuhasebeYetkiId,
-            YetkiAdi = k.YetkiAdi,
-            Onay = k.Onay,
-            KayitTarihi = k.KayitTarihi,
             PoliceSayisi = policeSayilariDict.GetValueOrDefault(k.Id, 0)
         }).ToList();
     }

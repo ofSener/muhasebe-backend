@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PoliceSigortali> PoliceSigortalilari => Set<PoliceSigortali>();
     public DbSet<Musteri> Musteriler => Set<Musteri>();
     public DbSet<Kullanici> Kullanicilar => Set<Kullanici>();
+    public DbSet<KullaniciEski> KullanicilarEski => Set<KullaniciEski>();
     public DbSet<SigortaSirketi> SigortaSirketleri => Set<SigortaSirketi>();
     public DbSet<Sube> Subeler => Set<Sube>();
     public DbSet<Firma> Firmalar => Set<Firma>();

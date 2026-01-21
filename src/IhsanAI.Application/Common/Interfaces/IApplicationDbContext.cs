@@ -15,6 +15,7 @@ public interface IApplicationDbContext
     DbSet<PoliceSigortali> PoliceSigortalilari { get; }
     DbSet<Musteri> Musteriler { get; }
     DbSet<Kullanici> Kullanicilar { get; }
+    DbSet<KullaniciEski> KullanicilarEski { get; }
     DbSet<SigortaSirketi> SigortaSirketleri { get; }
     DbSet<Sube> Subeler { get; }
     DbSet<Firma> Firmalar { get; }
