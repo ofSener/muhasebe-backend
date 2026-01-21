@@ -30,7 +30,9 @@ public record CreateYetkiCommand(
     string? FinansDashboardGorebilsin,
     string? PoliceOdemeleriGorebilsin,
     string? TahsilatTakibiGorebilsin,
-    string? FinansRaporlariGorebilsin
+    string? FinansRaporlariGorebilsin,
+    // Entegrasyon Yetkileri
+    string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki>;
 
 public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yetki>
@@ -84,6 +86,8 @@ public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yet
             PoliceOdemeleriGorebilsin = request.PoliceOdemeleriGorebilsin,
             TahsilatTakibiGorebilsin = request.TahsilatTakibiGorebilsin,
             FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin,
+            // Entegrasyon Yetkileri
+            DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin,
             KayitTarihi = _dateTimeService.Now,
             GuncellemeTarihi = _dateTimeService.Now
         };

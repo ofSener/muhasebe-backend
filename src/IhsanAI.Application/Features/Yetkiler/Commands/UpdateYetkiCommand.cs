@@ -30,7 +30,9 @@ public record UpdateYetkiCommand(
     string? FinansDashboardGorebilsin,
     string? PoliceOdemeleriGorebilsin,
     string? TahsilatTakibiGorebilsin,
-    string? FinansRaporlariGorebilsin
+    string? FinansRaporlariGorebilsin,
+    // Entegrasyon Yetkileri
+    string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki?>;
 
 public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yetki?>
@@ -128,6 +130,10 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
 
         if (request.FinansRaporlariGorebilsin != null)
             yetki.FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin;
+
+        // Entegrasyon Yetkileri
+        if (request.DriveEntegrasyonuGorebilsin != null)
+            yetki.DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin;
 
         yetki.GuncellemeTarihi = _dateTimeService.Now;
 
