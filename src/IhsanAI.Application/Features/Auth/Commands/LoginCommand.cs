@@ -38,14 +38,36 @@ public record UserDto
 
 public record PermissionsDto
 {
+    // Poliçe Yetkileri
     public string? GorebilecegiPoliceler { get; init; }
     public string? PoliceDuzenleyebilsin { get; init; }
     public string? PoliceHavuzunuGorebilsin { get; init; }
+    public string? PoliceAktarabilsin { get; init; }
+    public string? PoliceDosyalarinaErisebilsin { get; init; }
+    public string? PoliceYakalamaSecenekleri { get; init; }
+
+    // Yönetim Yetkileri
     public string? YetkilerSayfasindaIslemYapabilsin { get; init; }
     public string? AcenteliklerSayfasindaIslemYapabilsin { get; init; }
     public string? KomisyonOranlariniDuzenleyebilsin { get; init; }
     public string? ProduktorleriGorebilsin { get; init; }
-    public string? PoliceAktarabilsin { get; init; }
+    public string? AcenteliklereGorePoliceYakalansin { get; init; }
+
+    // Müşteri Yetkileri
+    public string? MusterileriGorebilsin { get; init; }
+    public string? MusteriListesiGorebilsin { get; init; }
+    public string? MusteriDetayGorebilsin { get; init; }
+    public string? YenilemeTakibiGorebilsin { get; init; }
+
+    // Finans Yetkileri
+    public string? FinansSayfasiniGorebilsin { get; init; }
+    public string? FinansDashboardGorebilsin { get; init; }
+    public string? PoliceOdemeleriGorebilsin { get; init; }
+    public string? TahsilatTakibiGorebilsin { get; init; }
+    public string? FinansRaporlariGorebilsin { get; init; }
+
+    // Entegrasyon Yetkileri
+    public string? DriveEntegrasyonuGorebilsin { get; init; }
 }
 
 // Login Command
@@ -149,14 +171,32 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
                 ProfilResmi = kullanici.ProfilYolu,
                 Permissions = yetki != null ? new PermissionsDto
                 {
+                    // Poliçe Yetkileri
                     GorebilecegiPoliceler = yetki.GorebilecegiPolicelerveKartlar,
                     PoliceDuzenleyebilsin = yetki.PoliceDuzenleyebilsin,
                     PoliceHavuzunuGorebilsin = yetki.PoliceHavuzunuGorebilsin,
+                    PoliceAktarabilsin = yetki.PoliceAktarabilsin,
+                    PoliceDosyalarinaErisebilsin = yetki.PoliceDosyalarinaErisebilsin,
+                    PoliceYakalamaSecenekleri = yetki.PoliceYakalamaSecenekleri,
+                    // Yönetim Yetkileri
                     YetkilerSayfasindaIslemYapabilsin = yetki.YetkilerSayfasindaIslemYapabilsin,
                     AcenteliklerSayfasindaIslemYapabilsin = yetki.AcenteliklerSayfasindaIslemYapabilsin,
                     KomisyonOranlariniDuzenleyebilsin = yetki.KomisyonOranlariniDuzenleyebilsin,
                     ProduktorleriGorebilsin = yetki.ProduktorleriGorebilsin,
-                    PoliceAktarabilsin = yetki.PoliceAktarabilsin
+                    AcenteliklereGorePoliceYakalansin = yetki.AcenteliklereGorePoliceYakalansin,
+                    // Müşteri Yetkileri
+                    MusterileriGorebilsin = yetki.MusterileriGorebilsin,
+                    MusteriListesiGorebilsin = yetki.MusteriListesiGorebilsin,
+                    MusteriDetayGorebilsin = yetki.MusteriDetayGorebilsin,
+                    YenilemeTakibiGorebilsin = yetki.YenilemeTakibiGorebilsin,
+                    // Finans Yetkileri
+                    FinansSayfasiniGorebilsin = yetki.FinansSayfasiniGorebilsin,
+                    FinansDashboardGorebilsin = yetki.FinansDashboardGorebilsin,
+                    PoliceOdemeleriGorebilsin = yetki.PoliceOdemeleriGorebilsin,
+                    TahsilatTakibiGorebilsin = yetki.TahsilatTakibiGorebilsin,
+                    FinansRaporlariGorebilsin = yetki.FinansRaporlariGorebilsin,
+                    // Entegrasyon Yetkileri
+                    DriveEntegrasyonuGorebilsin = yetki.DriveEntegrasyonuGorebilsin
                 } : null
             }
         };
@@ -192,6 +232,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        // JWT Token sadece kimlik bilgisi içerir - yetkiler ayrı API'den alınır
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, kullanici.Id.ToString()),
@@ -202,19 +243,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             new("firmaId", kullanici.FirmaId?.ToString() ?? ""),
             new("subeId", kullanici.SubeId?.ToString() ?? "")
         };
-
-        // Add permission claims
-        if (yetki != null)
-        {
-            claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
-            claims.Add(new Claim("policeDuzenleyebilsin", yetki.PoliceDuzenleyebilsin ?? "0"));
-            claims.Add(new Claim("policeHavuzunuGorebilsin", yetki.PoliceHavuzunuGorebilsin ?? "0"));
-            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", yetki.YetkilerSayfasindaIslemYapabilsin ?? "0"));
-            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", yetki.AcenteliklerSayfasindaIslemYapabilsin ?? "0"));
-            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", yetki.KomisyonOranlariniDuzenleyebilsin ?? "0"));
-            claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
-            claims.Add(new Claim("policeAktarabilsin", yetki.PoliceAktarabilsin ?? "0"));
-        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,

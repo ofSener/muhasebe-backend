@@ -58,14 +58,32 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
             ProfilResmi = kullanici.ProfilYolu,
             Permissions = yetki != null ? new PermissionsDto
             {
+                // Poliçe Yetkileri
                 GorebilecegiPoliceler = yetki.GorebilecegiPolicelerveKartlar,
                 PoliceDuzenleyebilsin = yetki.PoliceDuzenleyebilsin,
                 PoliceHavuzunuGorebilsin = yetki.PoliceHavuzunuGorebilsin,
+                PoliceAktarabilsin = yetki.PoliceAktarabilsin,
+                PoliceDosyalarinaErisebilsin = yetki.PoliceDosyalarinaErisebilsin,
+                PoliceYakalamaSecenekleri = yetki.PoliceYakalamaSecenekleri,
+                // Yönetim Yetkileri
                 YetkilerSayfasindaIslemYapabilsin = yetki.YetkilerSayfasindaIslemYapabilsin,
                 AcenteliklerSayfasindaIslemYapabilsin = yetki.AcenteliklerSayfasindaIslemYapabilsin,
                 KomisyonOranlariniDuzenleyebilsin = yetki.KomisyonOranlariniDuzenleyebilsin,
                 ProduktorleriGorebilsin = yetki.ProduktorleriGorebilsin,
-                PoliceAktarabilsin = yetki.PoliceAktarabilsin
+                AcenteliklereGorePoliceYakalansin = yetki.AcenteliklereGorePoliceYakalansin,
+                // Müşteri Yetkileri
+                MusterileriGorebilsin = yetki.MusterileriGorebilsin,
+                MusteriListesiGorebilsin = yetki.MusteriListesiGorebilsin,
+                MusteriDetayGorebilsin = yetki.MusteriDetayGorebilsin,
+                YenilemeTakibiGorebilsin = yetki.YenilemeTakibiGorebilsin,
+                // Finans Yetkileri
+                FinansSayfasiniGorebilsin = yetki.FinansSayfasiniGorebilsin,
+                FinansDashboardGorebilsin = yetki.FinansDashboardGorebilsin,
+                PoliceOdemeleriGorebilsin = yetki.PoliceOdemeleriGorebilsin,
+                TahsilatTakibiGorebilsin = yetki.TahsilatTakibiGorebilsin,
+                FinansRaporlariGorebilsin = yetki.FinansRaporlariGorebilsin,
+                // Entegrasyon Yetkileri
+                DriveEntegrasyonuGorebilsin = yetki.DriveEntegrasyonuGorebilsin
             } : null
         };
     }
