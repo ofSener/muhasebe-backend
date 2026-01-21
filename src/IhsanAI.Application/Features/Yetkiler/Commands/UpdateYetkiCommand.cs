@@ -33,7 +33,7 @@ public record UpdateYetkiCommand(
     [property: JsonPropertyName("tahsilatTakibiGorebilsin")] string? TahsilatTakibiGorebilsin,
     [property: JsonPropertyName("finansRaporlariGorebilsin")] string? FinansRaporlariGorebilsin,
     // Entegrasyon Yetkileri
-    [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? DriveEntegrasyonuGorebilsin
+    [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? driveEntegrasyonuGorebilsin
 ) : IRequest<Yetki?>;
 
 public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yetki?>
@@ -133,8 +133,8 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
             yetki.FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin;
 
         // Entegrasyon Yetkileri
-        if (request.DriveEntegrasyonuGorebilsin != null)
-            yetki.DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin;
+        if (request.driveEntegrasyonuGorebilsin != null)
+            yetki.DriveEntegrasyonuGorebilsin = request.driveEntegrasyonuGorebilsin;
 
         yetki.GuncellemeTarihi = _dateTimeService.Now;
 
