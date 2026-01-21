@@ -232,7 +232,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        // JWT Token sadece kimlik bilgisi içerir - yetkiler ayrı API'den alınır
+        // JWT Token kimlik ve yetki bilgilerini içerir
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, kullanici.Id.ToString()),
@@ -243,6 +243,19 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             new("firmaId", kullanici.FirmaId?.ToString() ?? ""),
             new("subeId", kullanici.SubeId?.ToString() ?? "")
         };
+
+        // Yetki claim'lerini ekle (authorization policy'ler için gerekli)
+        if (yetki != null)
+        {
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", yetki.YetkilerSayfasindaIslemYapabilsin ?? "0"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", yetki.AcenteliklerSayfasindaIslemYapabilsin ?? "0"));
+            claims.Add(new Claim("policeDuzenleyebilsin", yetki.PoliceDuzenleyebilsin ?? "0"));
+            claims.Add(new Claim("policeHavuzunuGorebilsin", yetki.PoliceHavuzunuGorebilsin ?? "0"));
+            claims.Add(new Claim("policeAktarabilsin", yetki.PoliceAktarabilsin ?? "0"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", yetki.KomisyonOranlariniDuzenleyebilsin ?? "0"));
+            claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
+            claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,
