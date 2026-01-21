@@ -22,12 +22,6 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApiServices(builder.Configuration);
 
-// JSON serialization - camelCase'den PascalCase'e otomatik dönüşüm
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNameCaseInsensitive = true;
-});
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
