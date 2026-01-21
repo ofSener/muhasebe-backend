@@ -33,7 +33,7 @@ public record CreateYetkiCommand(
     [property: JsonPropertyName("tahsilatTakibiGorebilsin")] string? TahsilatTakibiGorebilsin,
     [property: JsonPropertyName("finansRaporlariGorebilsin")] string? FinansRaporlariGorebilsin,
     // Entegrasyon Yetkileri
-    [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? driveEntegrasyonuGorebilsin
+    [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki>;
 
 public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yetki>
@@ -88,7 +88,7 @@ public class CreateYetkiCommandHandler : IRequestHandler<CreateYetkiCommand, Yet
             TahsilatTakibiGorebilsin = request.TahsilatTakibiGorebilsin,
             FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin,
             // Entegrasyon Yetkileri
-            DriveEntegrasyonuGorebilsin = request.driveEntegrasyonuGorebilsin,
+            DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin,
             KayitTarihi = _dateTimeService.Now,
             GuncellemeTarihi = _dateTimeService.Now
         };
