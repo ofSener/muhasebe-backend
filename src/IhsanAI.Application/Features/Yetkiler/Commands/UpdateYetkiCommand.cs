@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
@@ -8,29 +9,31 @@ namespace IhsanAI.Application.Features.Yetkiler.Commands;
 
 public record UpdateYetkiCommand(
     int Id,
-    string? YetkiAdi,
-    string? GorebilecegiPolicelerveKartlar,
-    string? PoliceYakalamaSecenekleri,
-    string? ProduktorleriGorebilsin,
-    string? PoliceDuzenleyebilsin,
-    string? PoliceDosyalarinaErisebilsin,
-    string? PoliceAktarabilsin,
-    string? PoliceHavuzunuGorebilsin,
-    string? YetkilerSayfasindaIslemYapabilsin,
-    string? AcenteliklerSayfasindaIslemYapabilsin,
-    string? KomisyonOranlariniDuzenleyebilsin,
-    string? AcenteliklereGorePoliceYakalansin,
-    string? MusterileriGorebilsin,
-    string? FinansSayfasiniGorebilsin,
+    [property: JsonPropertyName("yetkiAdi")] string? YetkiAdi,
+    [property: JsonPropertyName("gorebilecegiPolicelerveKartlar")] string? GorebilecegiPolicelerveKartlar,
+    [property: JsonPropertyName("policeYakalamaSecenekleri")] string? PoliceYakalamaSecenekleri,
+    [property: JsonPropertyName("produktorleriGorebilsin")] string? ProduktorleriGorebilsin,
+    [property: JsonPropertyName("policeDuzenleyebilsin")] string? PoliceDuzenleyebilsin,
+    [property: JsonPropertyName("policeDosyalarinaErisebilsin")] string? PoliceDosyalarinaErisebilsin,
+    [property: JsonPropertyName("policeAktarabilsin")] string? PoliceAktarabilsin,
+    [property: JsonPropertyName("policeHavuzunuGorebilsin")] string? PoliceHavuzunuGorebilsin,
+    [property: JsonPropertyName("yetkilerSayfasindaIslemYapabilsin")] string? YetkilerSayfasindaIslemYapabilsin,
+    [property: JsonPropertyName("acenteliklerSayfasindaIslemYapabilsin")] string? AcenteliklerSayfasindaIslemYapabilsin,
+    [property: JsonPropertyName("komisyonOranlariniDuzenleyebilsin")] string? KomisyonOranlariniDuzenleyebilsin,
+    [property: JsonPropertyName("acenteliklereGorePoliceYakalansin")] string? AcenteliklereGorePoliceYakalansin,
+    [property: JsonPropertyName("musterileriGorebilsin")] string? MusterileriGorebilsin,
+    [property: JsonPropertyName("finansSayfasiniGorebilsin")] string? FinansSayfasiniGorebilsin,
     // Müşterilerimiz Alt Yetkileri
-    string? MusteriListesiGorebilsin,
-    string? MusteriDetayGorebilsin,
-    string? YenilemeTakibiGorebilsin,
+    [property: JsonPropertyName("musteriListesiGorebilsin")] string? MusteriListesiGorebilsin,
+    [property: JsonPropertyName("musteriDetayGorebilsin")] string? MusteriDetayGorebilsin,
+    [property: JsonPropertyName("yenilemeTakibiGorebilsin")] string? YenilemeTakibiGorebilsin,
     // Finans Alt Yetkileri
-    string? FinansDashboardGorebilsin,
-    string? PoliceOdemeleriGorebilsin,
-    string? TahsilatTakibiGorebilsin,
-    string? FinansRaporlariGorebilsin
+    [property: JsonPropertyName("finansDashboardGorebilsin")] string? FinansDashboardGorebilsin,
+    [property: JsonPropertyName("policeOdemeleriGorebilsin")] string? PoliceOdemeleriGorebilsin,
+    [property: JsonPropertyName("tahsilatTakibiGorebilsin")] string? TahsilatTakibiGorebilsin,
+    [property: JsonPropertyName("finansRaporlariGorebilsin")] string? FinansRaporlariGorebilsin,
+    // Entegrasyon Yetkileri
+    [property: JsonPropertyName("driveEntegrasyonuGorebilsin")] string? DriveEntegrasyonuGorebilsin
 ) : IRequest<Yetki?>;
 
 public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yetki?>
@@ -128,6 +131,10 @@ public class UpdateYetkiCommandHandler : IRequestHandler<UpdateYetkiCommand, Yet
 
         if (request.FinansRaporlariGorebilsin != null)
             yetki.FinansRaporlariGorebilsin = request.FinansRaporlariGorebilsin;
+
+        // Entegrasyon Yetkileri
+        if (request.DriveEntegrasyonuGorebilsin != null)
+            yetki.DriveEntegrasyonuGorebilsin = request.DriveEntegrasyonuGorebilsin;
 
         yetki.GuncellemeTarihi = _dateTimeService.Now;
 
