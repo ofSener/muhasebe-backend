@@ -11,13 +11,16 @@ public class ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly IWebHostEnvironment _environment;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger)
+        ILogger<ExceptionHandlingMiddleware> logger,
+        IWebHostEnvironment environment)
     {
         _next = next;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -28,12 +31,13 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unhandled exception occurred");
-            await HandleExceptionAsync(context, ex);
+            var errorId = Guid.NewGuid().ToString("N")[..8]; // Kısa 8 karakterlik ID
+            _logger.LogError(ex, "Error {ErrorId}: An unhandled exception occurred", errorId);
+            await HandleExceptionAsync(context, ex, errorId);
         }
     }
 
-    private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception, string errorId)
     {
         context.Response.ContentType = "application/json";
 
@@ -61,7 +65,10 @@ public class ExceptionHandlingMiddleware
             ),
             _ => (
                 HttpStatusCode.InternalServerError,
-                new[] { new Error("ServerError", exception.Message + " | " + exception.InnerException?.Message) }
+                new[] { new Error("ServerError",
+                    _environment.IsDevelopment()
+                        ? exception.Message
+                        : $"Bir hata oluştu. Hata kodu: {errorId}") }
             )
         };
 

@@ -28,31 +28,9 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
 
     public async Task<List<YakalananPolice>> Handle(GetYakalananPolicelerQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.YakalananPoliceler.AsQueryable();
-
-        // Firma bazlı temel filtre
-        if (_currentUserService.FirmaId.HasValue)
-        {
-            query = query.Where(x => x.FirmaId == _currentUserService.FirmaId.Value);
-        }
-
-        // GorebilecegiPoliceler yetkisine göre filtrele
-        // "1" = Tüm firma poliçeleri (admin)
-        // "2" = Şube poliçeleri (editor)
-        // "3" = Sadece kendi poliçeleri (viewer)
-        var gorebilecegiPoliceler = _currentUserService.GorebilecegiPoliceler ?? "3";
-        var userId = int.TryParse(_currentUserService.UserId, out var uid) ? uid : 0;
-
-        query = gorebilecegiPoliceler switch
-        {
-            "1" => query, // Tüm firma poliçeleri - ek filtre yok
-            "2" => _currentUserService.SubeId.HasValue
-                ? query.Where(x => x.SubeId == _currentUserService.SubeId.Value)
-                : query,
-            "3" => query.Where(x => x.UyeId == userId), // Sadece kendi poliçeleri
-            "4" => query.Where(x => false), // Hiçbir poliçeyi göremez
-            _ => query.Where(x => x.UyeId == userId) // Default - sadece kendi poliçeleri
-        };
+        var query = _context.YakalananPoliceler
+            .AsQueryable()
+            .ApplyAuthorizationFilters(_currentUserService);
 
         // Tarih filtreleme (TanzimTarihi'ne göre)
         if (request.StartDate.HasValue)
@@ -94,16 +72,22 @@ public record GetYakalananPoliceByIdQuery(int Id) : IRequest<YakalananPolice?>;
 public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPoliceByIdQuery, YakalananPolice?>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetYakalananPoliceByIdQueryHandler(IApplicationDbContext context)
+    public GetYakalananPoliceByIdQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<YakalananPolice?> Handle(GetYakalananPoliceByIdQuery request, CancellationToken cancellationToken)
     {
         return await _context.YakalananPoliceler
+            .Where(x => x.Id == request.Id)
+            .ApplyAuthorizationFilters(_currentUserService)
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }

@@ -36,6 +36,9 @@ public record GetSonAktivitelerQuery(
 // Handler
 public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQuery, SonAktivitelerResponse>
 {
+    private const int MinLimit = 1;
+    private const int MaxLimit = 100;
+
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
 
@@ -50,10 +53,10 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
     public async Task<SonAktivitelerResponse> Handle(GetSonAktivitelerQuery request, CancellationToken cancellationToken)
     {
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
-        var limit = Math.Min(Math.Max(request.Limit, 1), 100); // 1-100 arası
+        var limit = Math.Clamp(request.Limit, MinLimit, MaxLimit);
 
         // Poliçeleri getir
-        var policeQuery = _context.Policeler.AsQueryable();
+        var policeQuery = _context.Policeler.Where(p => true);
         if (firmaId.HasValue)
         {
             policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
@@ -75,46 +78,53 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        if (policeler.Count == 0)
+        {
+            return new SonAktivitelerResponse { Aktiviteler = new List<SonAktiviteItem>() };
+        }
+
         // İlişkili verileri getir
         var musteriIds = policeler.Where(p => p.MusteriId.HasValue).Select(p => p.MusteriId!.Value).Distinct().ToList();
         var sirketIds = policeler.Select(p => p.SigortaSirketiId).Distinct().ToList();
         var kullaniciIds = policeler.Select(p => p.IsOrtagiUyeId).Distinct().ToList();
         var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
 
-        var musteriler = await _context.Musteriler
+        // Dictionary'ler ile O(1) lookup
+        var musteriDict = (await _context.Musteriler
             .Where(m => musteriIds.Contains(m.Id))
             .Select(m => new { m.Id, m.Adi, m.Soyadi })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(m => m.Id);
 
-        var sirketler = await _context.SigortaSirketleri
+        var sirketDict = (await _context.SigortaSirketleri
             .Where(s => sirketIds.Contains(s.Id))
             .Select(s => new { s.Id, s.Ad, s.Kod })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(s => s.Id);
 
-        var kullanicilar = await _context.Kullanicilar
+        var kullaniciDict = (await _context.Kullanicilar
             .Where(k => kullaniciIds.Contains(k.Id))
             .Select(k => new { k.Id, k.Adi, k.Soyadi })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(k => k.Id);
 
-        // Branşları veritabanından getir
-        var branslar = await _context.Branslar
+        var bransDict = (await _context.Branslar
             .Where(b => bransIds.Contains(b.Id))
             .Select(b => new { b.Id, b.Ad })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(b => b.Id);
 
-        // Aktivite listesi oluştur
+        // Aktivite listesi oluştur - O(1) dictionary lookup
         var aktiviteler = policeler.Select(p =>
         {
-            var musteri = p.MusteriId.HasValue
-                ? musteriler.FirstOrDefault(m => m.Id == p.MusteriId.Value)
-                : null;
-            var sirket = sirketler.FirstOrDefault(s => s.Id == p.SigortaSirketiId);
-            var kullanici = kullanicilar.FirstOrDefault(k => k.Id == p.IsOrtagiUyeId);
-            var brans = branslar.FirstOrDefault(b => b.Id == p.BransId);
+            musteriDict.TryGetValue(p.MusteriId ?? 0, out var musteri);
+            sirketDict.TryGetValue(p.SigortaSirketiId, out var sirket);
+            kullaniciDict.TryGetValue(p.IsOrtagiUyeId, out var kullanici);
+            bransDict.TryGetValue(p.BransId, out var brans);
 
             return new SonAktiviteItem
             {

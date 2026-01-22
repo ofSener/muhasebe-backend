@@ -50,27 +50,31 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
     {
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
         var now = _dateTimeService.Now;
-        var startDate = request.StartDate ?? new DateTime(now.Year, 1, 1); // Yıl başından itibaren
+        var startDate = request.StartDate ?? new DateTime(now.Year, 1, 1);
         var endDate = request.EndDate ?? now;
 
-        var query = _context.Policeler.AsQueryable();
+        var query = _context.Policeler.Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate);
 
         if (firmaId.HasValue)
         {
             query = query.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
         }
 
-        query = query.Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate);
-
         var policeler = await query.AsNoTracking().ToListAsync(cancellationToken);
 
-        // Branşları veritabanından getir
+        if (policeler.Count == 0)
+        {
+            return new BransDagilimResponse { Dagilim = new List<BransDagilimItem>() };
+        }
+
+        // Branşları Dictionary ile O(1) lookup
         var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
-        var branslar = await _context.Branslar
+        var bransDict = (await _context.Branslar
             .Where(b => bransIds.Contains(b.Id))
             .Select(b => new { b.Id, b.Ad })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(b => b.Id);
 
         var toplamPrim = policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
@@ -79,7 +83,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
             .GroupBy(p => p.BransId)
             .Select(g =>
             {
-                var brans = branslar.FirstOrDefault(b => b.Id == g.Key);
+                bransDict.TryGetValue(g.Key, out var brans);
                 return new BransDagilimItem
                 {
                     BransId = g.Key,

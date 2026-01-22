@@ -55,6 +55,8 @@ public record GetMyEarningsQuery(
 // Handler
 public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyEarningsResponse>
 {
+    private const int MaxDetailRecords = 100;
+
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
@@ -78,9 +80,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
         }
 
         // Kullanıcının poliçelerini getir
-        var query = _context.Policeler
-            .Where(p => p.IsOrtagiUyeId == currentUserId)
-            .AsQueryable();
+        var query = _context.Policeler.Where(p => p.IsOrtagiUyeId == currentUserId);
 
         // Tarih filtresi
         if (request.StartDate.HasValue)
@@ -101,29 +101,35 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
 
         var policeler = await query.AsNoTracking().ToListAsync(cancellationToken);
 
-        // Sigorta şirketi bilgilerini getir
+        if (policeler.Count == 0)
+        {
+            return new MyEarningsResponse();
+        }
+
+        // Dictionary'ler ile O(1) lookup
         var sirketIds = policeler.Select(p => p.SigortaSirketiId).Distinct().ToList();
-        var sirketler = await _context.Firmalar
+        var sirketDict = (await _context.Firmalar
             .Where(f => sirketIds.Contains(f.Id))
             .Select(f => new { f.Id, f.FirmaAdi })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(f => f.Id);
 
-        // Müşteri bilgilerini getir
         var musteriIds = policeler.Where(p => p.MusteriId.HasValue).Select(p => p.MusteriId!.Value).Distinct().ToList();
-        var musteriler = await _context.Musteriler
+        var musteriDict = (await _context.Musteriler
             .Where(m => musteriIds.Contains(m.Id))
             .Select(m => new { m.Id, m.Adi, m.Soyadi })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(m => m.Id);
 
-        // Branş bilgilerini getir
         var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
-        var branslar = await _context.Branslar
+        var bransDict = (await _context.Branslar
             .Where(b => bransIds.Contains(b.Id))
             .Select(b => new { b.Id, b.Ad })
             .AsNoTracking()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .ToDictionary(b => b.Id);
 
         // Toplam kazanç hesapla
         var toplamKazanc = policeler.Sum(p => p.IsOrtagiKomisyon);
@@ -158,12 +164,12 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             });
         }
 
-        // Türe göre dağılım
+        // Türe göre dağılım - O(1) dictionary lookup
         var tureGoreDagilim = policeler
             .GroupBy(p => p.BransId)
             .Select(g =>
             {
-                var brans = branslar.FirstOrDefault(b => b.Id == g.Key);
+                bransDict.TryGetValue(g.Key, out var brans);
                 return new EarningByType
                 {
                     SigortaTuru = brans?.Ad ?? $"Branş #{g.Key}",
@@ -174,17 +180,15 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             .OrderByDescending(x => x.Tutar)
             .ToList();
 
-        // Detaylar
+        // Detaylar - O(1) dictionary lookup
         var detaylar = policeler
             .OrderByDescending(p => p.EklenmeTarihi)
-            .Take(100) // Son 100 kayıt
+            .Take(MaxDetailRecords)
             .Select(p =>
             {
-                var sirket = sirketler.FirstOrDefault(s => s.Id == p.SigortaSirketiId);
-                var musteri = p.MusteriId.HasValue
-                    ? musteriler.FirstOrDefault(m => m.Id == p.MusteriId.Value)
-                    : null;
-                var brans = branslar.FirstOrDefault(b => b.Id == p.BransId);
+                sirketDict.TryGetValue(p.SigortaSirketiId, out var sirket);
+                musteriDict.TryGetValue(p.MusteriId ?? 0, out var musteri);
+                bransDict.TryGetValue(p.BransId, out var brans);
 
                 return new EarningDetail
                 {
