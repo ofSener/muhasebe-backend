@@ -121,10 +121,10 @@ public class GoogleDriveService : IGoogleDriveService
 
         try
         {
-            // Get or create folder structure: /IHSAN AI/YYYY/MM/
+            // Get or create folder structure: /IHSAN AI/YYYY/MM - AyAdi/
             var now = _dateTimeService.Now;
             var yearFolder = now.Year.ToString();
-            var monthFolder = now.Month.ToString("D2");
+            var monthFolder = GetTurkishMonthFolder(now.Month);
 
             var rootFolderId = await GetOrCreateFolderAsync(driveService, "IHSAN AI", null);
             var yearFolderId = await GetOrCreateFolderAsync(driveService, yearFolder, rootFolderId);
@@ -287,5 +287,25 @@ public class GoogleDriveService : IGoogleDriveService
         var folder = await createRequest.ExecuteAsync();
 
         return folder.Id;
+    }
+
+    private static string GetTurkishMonthFolder(int month)
+    {
+        var monthNames = new Dictionary<int, string>
+        {
+            { 1, "01 - Ocak" },
+            { 2, "02 - Şubat" },
+            { 3, "03 - Mart" },
+            { 4, "04 - Nisan" },
+            { 5, "05 - Mayıs" },
+            { 6, "06 - Haziran" },
+            { 7, "07 - Temmuz" },
+            { 8, "08 - Ağustos" },
+            { 9, "09 - Eylül" },
+            { 10, "10 - Ekim" },
+            { 11, "11 - Kasım" },
+            { 12, "12 - Aralık" }
+        };
+        return monthNames.GetValueOrDefault(month, month.ToString("D2"));
     }
 }
