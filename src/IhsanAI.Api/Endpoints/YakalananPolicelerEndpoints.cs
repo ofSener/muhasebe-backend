@@ -11,13 +11,19 @@ public static class YakalananPolicelerEndpoints
             .WithTags("Captured Policies")
             .RequireAuthorization();
 
-        group.MapGet("/", async (int? firmaId, int? limit, IMediator mediator) =>
+        group.MapGet("/", async (
+            DateTime? startDate,
+            DateTime? endDate,
+            string? sortBy,
+            string? sortDir,
+            int? limit,
+            IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetYakalananPolicelerQuery(firmaId, limit));
+            var result = await mediator.Send(new GetYakalananPolicelerQuery(startDate, endDate, sortBy, sortDir, limit));
             return Results.Ok(result);
         })
         .WithName("GetYakalananPoliceler")
-        .WithDescription("Yakalanan poliçeleri listeler");
+        .WithDescription("Yakalanan poliçeleri listeler (yetki bazlı filtreleme ile)");
 
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
@@ -27,13 +33,13 @@ public static class YakalananPolicelerEndpoints
         .WithName("GetYakalananPoliceById")
         .WithDescription("ID'ye göre yakalanan poliçe getirir");
 
-        group.MapGet("/stats", async (int? firmaId, DateTime? startDate, DateTime? endDate, IMediator mediator) =>
+        group.MapGet("/stats", async (DateTime? startDate, DateTime? endDate, IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetYakalananPoliceStatsQuery(firmaId, startDate, endDate));
+            var result = await mediator.Send(new GetYakalananPoliceStatsQuery(startDate, endDate));
             return Results.Ok(result);
         })
         .WithName("GetYakalananPoliceStats")
-        .WithDescription("Yakalanan poliçe istatistiklerini getirir");
+        .WithDescription("Yakalanan poliçe istatistiklerini getirir (yetki bazlı filtreleme ile)");
 
         return app;
     }

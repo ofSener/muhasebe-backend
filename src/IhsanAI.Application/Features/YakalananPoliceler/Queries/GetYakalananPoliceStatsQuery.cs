@@ -22,7 +22,6 @@ public record ActiveProducerDto
 }
 
 public record GetYakalananPoliceStatsQuery(
-    int? FirmaId = null,
     DateTime? StartDate = null,
     DateTime? EndDate = null
 ) : IRequest<YakalananPoliceStatsDto>;
@@ -30,29 +29,52 @@ public record GetYakalananPoliceStatsQuery(
 public class GetYakalananPoliceStatsQueryHandler : IRequestHandler<GetYakalananPoliceStatsQuery, YakalananPoliceStatsDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetYakalananPoliceStatsQueryHandler(IApplicationDbContext context)
+    public GetYakalananPoliceStatsQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<YakalananPoliceStatsDto> Handle(GetYakalananPoliceStatsQuery request, CancellationToken cancellationToken)
     {
         var query = _context.YakalananPoliceler.AsQueryable();
 
-        if (request.FirmaId.HasValue)
+        // Firma bazlı temel filtre
+        if (_currentUserService.FirmaId.HasValue)
         {
-            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+            query = query.Where(x => x.FirmaId == _currentUserService.FirmaId.Value);
         }
 
+        // GorebilecegiPoliceler yetkisine göre filtrele
+        var gorebilecegiPoliceler = _currentUserService.GorebilecegiPoliceler ?? "3";
+        var userId = int.TryParse(_currentUserService.UserId, out var uid) ? uid : 0;
+
+        query = gorebilecegiPoliceler switch
+        {
+            "1" => query, // Tüm firma poliçeleri
+            "2" => _currentUserService.SubeId.HasValue
+                ? query.Where(x => x.SubeId == _currentUserService.SubeId.Value)
+                : query,
+            "3" => query.Where(x => x.UyeId == userId), // Sadece kendi poliçeleri
+            "4" => query.Where(x => false), // Hiçbir poliçeyi göremez
+            _ => query.Where(x => x.UyeId == userId) // Default - sadece kendi poliçeleri
+        };
+
+        // Tarih filtreleme (TanzimTarihi'ne göre)
         if (request.StartDate.HasValue)
         {
-            query = query.Where(x => x.EklenmeTarihi >= request.StartDate.Value);
+            var startDate = request.StartDate.Value.Date;
+            query = query.Where(x => x.TanzimTarihi >= startDate);
         }
 
         if (request.EndDate.HasValue)
         {
-            query = query.Where(x => x.EklenmeTarihi <= request.EndDate.Value);
+            var endDate = request.EndDate.Value.Date.AddDays(1).AddTicks(-1);
+            query = query.Where(x => x.TanzimTarihi <= endDate);
         }
 
         var policeler = await query.AsNoTracking().ToListAsync(cancellationToken);

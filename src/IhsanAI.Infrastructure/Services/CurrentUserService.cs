@@ -19,6 +19,7 @@ public class CurrentUserService : ICurrentUserService
     public int? SubeId => GetClaimAsInt("subeId");
     public bool IsCompanyAdmin => GetClaimAsBool("yetkilerSayfasindaIslemYapabilsin");
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+    public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;
 
     private int? GetClaimAsInt(string claimType)
     {

@@ -8,4 +8,5 @@ public interface ICurrentUserService
     int? SubeId { get; }
     bool IsCompanyAdmin { get; }
     bool IsAuthenticated { get; }
+    string? GorebilecegiPoliceler { get; }
 }
