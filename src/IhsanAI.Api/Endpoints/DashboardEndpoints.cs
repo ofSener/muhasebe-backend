@@ -66,10 +66,12 @@ public static class DashboardEndpoints
         // Son aktiviteler
         group.MapGet("/son-aktiviteler", async (
             int? firmaId,
+            DateTime? startDate,
+            DateTime? endDate,
             int? limit,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetSonAktivitelerQuery(firmaId, limit ?? 20));
+            var result = await mediator.Send(new GetSonAktivitelerQuery(firmaId, startDate, endDate, limit ?? 20));
             return Results.Ok(result);
         })
         .WithName("GetSonAktiviteler")

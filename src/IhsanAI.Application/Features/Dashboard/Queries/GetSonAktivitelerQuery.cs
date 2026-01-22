@@ -28,6 +28,8 @@ public record SonAktivitelerResponse
 // Query
 public record GetSonAktivitelerQuery(
     int? FirmaId = null,
+    DateTime? StartDate = null,
+    DateTime? EndDate = null,
     int Limit = 20
 ) : IRequest<SonAktivitelerResponse>;
 
@@ -70,6 +72,16 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         if (firmaId.HasValue)
         {
             policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+        }
+
+        // Tarih filtreleme
+        if (request.StartDate.HasValue)
+        {
+            policeQuery = policeQuery.Where(p => p.EklenmeTarihi >= request.StartDate.Value);
+        }
+        if (request.EndDate.HasValue)
+        {
+            policeQuery = policeQuery.Where(p => p.EklenmeTarihi <= request.EndDate.Value);
         }
 
         var policeler = await policeQuery
