@@ -4,8 +4,15 @@ using IhsanAI.Api.Extensions;
 using IhsanAI.Api.Endpoints;
 using IhsanAI.Application;
 using IhsanAI.Infrastructure;
+using DotNetEnv;
+
+// Load .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add environment variables to configuration
+builder.Configuration.AddEnvironmentVariables();
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
