@@ -153,6 +153,60 @@ public class GetKullaniciByIdQueryHandler : IRequestHandler<GetKullaniciByIdQuer
     }
 }
 
+// ========== AKTİF KULLANICILAR QUERY ==========
+public record AktifKullaniciDto
+{
+    public int Id { get; init; }
+    public string? Adi { get; init; }
+    public string? Soyadi { get; init; }
+    public string? Email { get; init; }
+    public string? GsmNo { get; init; }
+}
+
+public record GetAktifKullanicilarQuery(int? FirmaId = null, int? Limit = null) : IRequest<List<AktifKullaniciDto>>;
+
+public class GetAktifKullanicilarQueryHandler : IRequestHandler<GetAktifKullanicilarQuery, List<AktifKullaniciDto>>
+{
+    private readonly IApplicationDbContext _context;
+
+    public GetAktifKullanicilarQueryHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<AktifKullaniciDto>> Handle(GetAktifKullanicilarQuery request, CancellationToken cancellationToken)
+    {
+        var query = _context.Kullanicilar
+            .Where(x => x.Onay == 1); // Sadece aktif kullanıcılar
+
+        if (request.FirmaId.HasValue)
+        {
+            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+        }
+
+        var result = query
+            .OrderBy(x => x.Adi)
+            .ThenBy(x => x.Soyadi)
+            .Select(x => new AktifKullaniciDto
+            {
+                Id = x.Id,
+                Adi = x.Adi,
+                Soyadi = x.Soyadi,
+                Email = x.Email,
+                GsmNo = x.GsmNo
+            });
+
+        if (request.Limit.HasValue)
+        {
+            result = result.Take(request.Limit.Value);
+        }
+
+        return await result
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+}
+
 public record ProducerSearchDto
 {
     public int Id { get; init; }

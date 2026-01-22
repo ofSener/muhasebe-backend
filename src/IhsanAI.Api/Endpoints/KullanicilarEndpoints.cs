@@ -22,6 +22,14 @@ public static class KullanicilarEndpoints
         .WithName("GetKullanicilar")
         .WithDescription("Kullanıcıları (çalışanları) listeler");
 
+        group.MapGet("/aktif", async (int? firmaId, int? limit, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetAktifKullanicilarQuery(firmaId, limit));
+            return Results.Ok(result);
+        })
+        .WithName("GetAktifKullanicilar")
+        .WithDescription("Sadece aktif kullanıcıları (Onay=1) listeler");
+
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
             var result = await mediator.Send(new GetKullaniciByIdQuery(id));
