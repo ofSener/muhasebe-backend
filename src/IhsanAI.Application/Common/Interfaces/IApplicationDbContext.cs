@@ -23,6 +23,7 @@ public interface IApplicationDbContext
     DbSet<KomisyonOrani> KomisyonOranlari { get; }
     DbSet<FirmaDriveToken> FirmaDriveTokens { get; }
     DbSet<DriveUploadLog> DriveUploadLogs { get; }
+    DbSet<Brans> Branslar { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

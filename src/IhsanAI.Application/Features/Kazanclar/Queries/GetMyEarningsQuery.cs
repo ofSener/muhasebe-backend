@@ -59,21 +59,6 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
 
-    // Branş ID -> Branş Adı eşleştirmesi
-    private static readonly Dictionary<int, string> BransAdlari = new()
-    {
-        { 1, "Trafik" },
-        { 2, "Kasko" },
-        { 3, "DASK" },
-        { 4, "Konut" },
-        { 5, "Sağlık" },
-        { 6, "Ferdi Kaza" },
-        { 7, "Seyahat" },
-        { 8, "Nakliyat" },
-        { 9, "İşyeri" },
-        { 10, "Diğer" }
-    };
-
     public GetMyEarningsQueryHandler(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
@@ -132,6 +117,14 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        // Branş bilgilerini getir
+        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
+        var branslar = await _context.Branslar
+            .Where(b => bransIds.Contains(b.Id))
+            .Select(b => new { b.Id, b.Ad })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         // Toplam kazanç hesapla
         var toplamKazanc = policeler.Sum(p => p.IsOrtagiKomisyon);
 
@@ -168,11 +161,15 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
         // Türe göre dağılım
         var tureGoreDagilim = policeler
             .GroupBy(p => p.BransId)
-            .Select(g => new EarningByType
+            .Select(g =>
             {
-                SigortaTuru = BransAdlari.GetValueOrDefault(g.Key, $"Branş #{g.Key}"),
-                Tutar = g.Sum(p => p.IsOrtagiKomisyon),
-                PoliceAdedi = g.Count()
+                var brans = branslar.FirstOrDefault(b => b.Id == g.Key);
+                return new EarningByType
+                {
+                    SigortaTuru = brans?.Ad ?? $"Branş #{g.Key}",
+                    Tutar = g.Sum(p => p.IsOrtagiKomisyon),
+                    PoliceAdedi = g.Count()
+                };
             })
             .OrderByDescending(x => x.Tutar)
             .ToList();
@@ -187,6 +184,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
                 var musteri = p.MusteriId.HasValue
                     ? musteriler.FirstOrDefault(m => m.Id == p.MusteriId.Value)
                     : null;
+                var brans = branslar.FirstOrDefault(b => b.Id == p.BransId);
 
                 return new EarningDetail
                 {
@@ -195,7 +193,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
                     Tarih = p.EklenmeTarihi,
                     MusteriAdi = musteri != null ? $"{musteri.Adi} {musteri.Soyadi}".Trim() : "Bilinmiyor",
                     SigortaSirketi = sirket?.FirmaAdi ?? $"Şirket #{p.SigortaSirketiId}",
-                    SigortaTuru = BransAdlari.GetValueOrDefault(p.BransId, $"Branş #{p.BransId}"),
+                    SigortaTuru = brans?.Ad ?? $"Branş #{p.BransId}",
                     NetPrim = p.NetPrim,
                     SirketKomisyonu = p.Komisyon,
                     KomisyonOrani = p.IsOrtagiKomisyonOrani,

@@ -36,21 +36,6 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
 
-    // Branş ID -> Branş Adı eşleştirmesi
-    private static readonly Dictionary<int, string> BransAdlari = new()
-    {
-        { 1, "Trafik" },
-        { 2, "Kasko" },
-        { 3, "DASK" },
-        { 4, "Konut" },
-        { 5, "Sağlık" },
-        { 6, "Ferdi Kaza" },
-        { 7, "Seyahat" },
-        { 8, "Nakliyat" },
-        { 9, "İşyeri" },
-        { 10, "Diğer" }
-    };
-
     public GetBransDagilimQueryHandler(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
@@ -79,19 +64,31 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
 
         var policeler = await query.AsNoTracking().ToListAsync(cancellationToken);
 
+        // Branşları veritabanından getir
+        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
+        var branslar = await _context.Branslar
+            .Where(b => bransIds.Contains(b.Id))
+            .Select(b => new { b.Id, b.Ad })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         var toplamPrim = policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
 
         var dagilim = policeler
             .GroupBy(p => p.BransId)
-            .Select(g => new BransDagilimItem
+            .Select(g =>
             {
-                BransId = g.Key,
-                BransAdi = BransAdlari.GetValueOrDefault(g.Key, $"Branş #{g.Key}"),
-                PoliceSayisi = g.Count(),
-                ToplamBrutPrim = g.Sum(p => p.BrutPrim),
-                ToplamKomisyon = g.Sum(p => p.Komisyon),
-                Yuzde = toplamPrim > 0 ? Math.Round(g.Sum(p => p.BrutPrim) / toplamPrim * 100, 1) : 0
+                var brans = branslar.FirstOrDefault(b => b.Id == g.Key);
+                return new BransDagilimItem
+                {
+                    BransId = g.Key,
+                    BransAdi = brans?.Ad ?? $"Branş #{g.Key}",
+                    PoliceSayisi = g.Count(),
+                    ToplamBrutPrim = g.Sum(p => p.BrutPrim),
+                    ToplamKomisyon = g.Sum(p => p.Komisyon),
+                    Yuzde = toplamPrim > 0 ? Math.Round(g.Sum(p => p.BrutPrim) / toplamPrim * 100, 1) : 0
+                };
             })
             .OrderByDescending(x => x.ToplamBrutPrim)
             .ToList();

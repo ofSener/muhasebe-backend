@@ -39,21 +39,6 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
 
-    // Branş ID -> Branş Adı eşleştirmesi
-    private static readonly Dictionary<int, string> BransAdlari = new()
-    {
-        { 1, "Trafik" },
-        { 2, "Kasko" },
-        { 3, "DASK" },
-        { 4, "Konut" },
-        { 5, "Sağlık" },
-        { 6, "Ferdi Kaza" },
-        { 7, "Seyahat" },
-        { 8, "Nakliyat" },
-        { 9, "İşyeri" },
-        { 10, "Diğer" }
-    };
-
     public GetSonAktivitelerQueryHandler(
         IApplicationDbContext context,
         ICurrentUserService currentUserService)
@@ -94,6 +79,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         var musteriIds = policeler.Where(p => p.MusteriId.HasValue).Select(p => p.MusteriId!.Value).Distinct().ToList();
         var sirketIds = policeler.Select(p => p.SigortaSirketiId).Distinct().ToList();
         var kullaniciIds = policeler.Select(p => p.IsOrtagiUyeId).Distinct().ToList();
+        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
 
         var musteriler = await _context.Musteriler
             .Where(m => musteriIds.Contains(m.Id))
@@ -113,6 +99,13 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+        // Branşları veritabanından getir
+        var branslar = await _context.Branslar
+            .Where(b => bransIds.Contains(b.Id))
+            .Select(b => new { b.Id, b.Ad })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         // Aktivite listesi oluştur
         var aktiviteler = policeler.Select(p =>
         {
@@ -121,6 +114,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
                 : null;
             var sirket = sirketler.FirstOrDefault(s => s.Id == p.SigortaSirketiId);
             var kullanici = kullanicilar.FirstOrDefault(k => k.Id == p.IsOrtagiUyeId);
+            var brans = branslar.FirstOrDefault(b => b.Id == p.BransId);
 
             return new SonAktiviteItem
             {
@@ -130,7 +124,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
                 MusteriAdi = musteri != null ? $"{musteri.Adi} {musteri.Soyadi}".Trim() : "Bilinmiyor",
                 SigortaSirketi = sirket?.Ad ?? $"Şirket #{p.SigortaSirketiId}",
                 SigortaSirketiKodu = sirket?.Kod ?? "",
-                BransAdi = BransAdlari.GetValueOrDefault(p.BransId, $"Branş #{p.BransId}"),
+                BransAdi = brans?.Ad ?? $"Branş #{p.BransId}",
                 BrutPrim = p.BrutPrim,
                 Komisyon = p.Komisyon,
                 EklenmeTarihi = p.EklenmeTarihi,
