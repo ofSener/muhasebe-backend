@@ -39,6 +39,7 @@ public static class DependencyInjection
 
         services.AddTransient<IDateTimeService, DateTimeService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IGoogleDriveService, GoogleDriveService>();
 
         return services;
     }

@@ -29,6 +29,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Firma> Firmalar => Set<Firma>();
     public DbSet<AcenteKodu> AcenteKodlari => Set<AcenteKodu>();
     public DbSet<KomisyonOrani> KomisyonOranlari => Set<KomisyonOrani>();
+    public DbSet<FirmaDriveToken> FirmaDriveTokens => Set<FirmaDriveToken>();
+    public DbSet<DriveUploadLog> DriveUploadLogs => Set<DriveUploadLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
