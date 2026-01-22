@@ -111,6 +111,7 @@ public static class DriveEndpoints
 
                 uploadLog.UploadStatus = result.Success ? UploadStatus.Success : UploadStatus.Failed;
                 uploadLog.DriveFileId = result.FileId;
+                uploadLog.DriveWebViewLink = result.WebViewLink;
                 uploadLog.ErrorMessage = result.ErrorMessage;
                 await context.SaveChangesAsync(CancellationToken.None);
 

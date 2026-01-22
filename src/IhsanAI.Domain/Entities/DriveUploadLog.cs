@@ -25,6 +25,10 @@ public class DriveUploadLog
     [MaxLength(100)]
     public string? DriveFileId { get; set; }
 
+    [Column("DriveWebViewLink")]
+    [MaxLength(500)]
+    public string? DriveWebViewLink { get; set; }
+
     [Column("DriveFolderPath")]
     [MaxLength(500)]
     public string? DriveFolderPath { get; set; }
