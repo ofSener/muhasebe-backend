@@ -61,7 +61,7 @@ public class ExceptionHandlingMiddleware
             ),
             _ => (
                 HttpStatusCode.InternalServerError,
-                new[] { new Error("ServerError", "An unexpected error occurred.") }
+                new[] { new Error("ServerError", exception.Message + " | " + exception.InnerException?.Message) }
             )
         };
 
