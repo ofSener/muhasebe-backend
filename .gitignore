@@ -46,6 +46,11 @@ Thumbs.db
 # User-specific files
 appsettings.*.local.json
 
+# Environment files
+.env
+*.env
+.env.*
+
 
 # Logs
 logs/
