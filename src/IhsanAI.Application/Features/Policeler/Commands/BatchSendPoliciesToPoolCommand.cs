@@ -11,8 +11,8 @@ public record BatchSendToPoolResultDto
 {
     public int SuccessCount { get; init; }
     public int FailedCount { get; init; }
-    public List<int> FailedIds { get; init; } = [];
-    public List<int> CreatedPoolIds { get; init; } = [];
+    public List<int> FailedIds { get; init; } = new List<int>();
+    public List<int> CreatedPoolIds { get; init; } = new List<int>();
 }
 
 public class BatchSendPoliciesToPoolCommandHandler : IRequestHandler<BatchSendPoliciesToPoolCommand, BatchSendToPoolResultDto>
