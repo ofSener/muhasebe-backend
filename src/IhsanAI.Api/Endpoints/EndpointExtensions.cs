@@ -23,6 +23,7 @@ public static class EndpointExtensions
         app.MapPoliceSigortalilariEndpoints();
         app.MapKazanclarEndpoints();
         app.MapDriveEndpoints();
+        app.MapDashboardEndpoints();
 
         return app;
     }
