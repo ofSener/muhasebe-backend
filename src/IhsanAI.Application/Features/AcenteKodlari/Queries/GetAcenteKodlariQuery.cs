@@ -5,9 +5,23 @@ using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.AcenteKodlari.Queries;
 
-public record GetAcenteKodlariQuery(int? FirmaId = null) : IRequest<List<AcenteKodu>>;
+// DTO for agency code with insurance company name
+public record AcenteKoduDto
+{
+    public int Id { get; init; }
+    public int SigortaSirketiId { get; init; }
+    public string SigortaSirketiAdi { get; init; } = string.Empty;
+    public string AcenteKoduDeger { get; init; } = string.Empty;
+    public string AcenteAdi { get; init; } = string.Empty;
+    public sbyte DisAcente { get; init; }
+    public int FirmaId { get; init; }
+    public DateTime? EklenmeTarihi { get; init; }
+    public DateTime? GuncellenmeTarihi { get; init; }
+}
 
-public class GetAcenteKodlariQueryHandler : IRequestHandler<GetAcenteKodlariQuery, List<AcenteKodu>>
+public record GetAcenteKodlariQuery(int? FirmaId = null) : IRequest<List<AcenteKoduDto>>;
+
+public class GetAcenteKodlariQueryHandler : IRequestHandler<GetAcenteKodlariQuery, List<AcenteKoduDto>>
 {
     private readonly IApplicationDbContext _context;
 
@@ -16,9 +30,23 @@ public class GetAcenteKodlariQueryHandler : IRequestHandler<GetAcenteKodlariQuer
         _context = context;
     }
 
-    public async Task<List<AcenteKodu>> Handle(GetAcenteKodlariQuery request, CancellationToken cancellationToken)
+    public async Task<List<AcenteKoduDto>> Handle(GetAcenteKodlariQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.AcenteKodlari.AsQueryable();
+        var query = from ak in _context.AcenteKodlari
+                    join ss in _context.SigortaSirketleri on ak.SigortaSirketiId equals ss.Id into ssJoin
+                    from ss in ssJoin.DefaultIfEmpty()
+                    select new AcenteKoduDto
+                    {
+                        Id = ak.Id,
+                        SigortaSirketiId = ak.SigortaSirketiId,
+                        SigortaSirketiAdi = ss != null ? ss.Ad : "Bilinmiyor",
+                        AcenteKoduDeger = ak.AcenteKoduDeger,
+                        AcenteAdi = ak.AcenteAdi,
+                        DisAcente = ak.DisAcente,
+                        FirmaId = ak.FirmaId,
+                        EklenmeTarihi = ak.EklenmeTarihi,
+                        GuncellenmeTarihi = ak.GuncellenmeTarihi
+                    };
 
         if (request.FirmaId.HasValue)
         {
@@ -32,9 +60,9 @@ public class GetAcenteKodlariQueryHandler : IRequestHandler<GetAcenteKodlariQuer
     }
 }
 
-public record GetAcenteKoduByIdQuery(int Id) : IRequest<AcenteKodu?>;
+public record GetAcenteKoduByIdQuery(int Id) : IRequest<AcenteKoduDto?>;
 
-public class GetAcenteKoduByIdQueryHandler : IRequestHandler<GetAcenteKoduByIdQuery, AcenteKodu?>
+public class GetAcenteKoduByIdQueryHandler : IRequestHandler<GetAcenteKoduByIdQuery, AcenteKoduDto?>
 {
     private readonly IApplicationDbContext _context;
 
@@ -43,10 +71,25 @@ public class GetAcenteKoduByIdQueryHandler : IRequestHandler<GetAcenteKoduByIdQu
         _context = context;
     }
 
-    public async Task<AcenteKodu?> Handle(GetAcenteKoduByIdQuery request, CancellationToken cancellationToken)
+    public async Task<AcenteKoduDto?> Handle(GetAcenteKoduByIdQuery request, CancellationToken cancellationToken)
     {
-        return await _context.AcenteKodlari
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
+        return await (from ak in _context.AcenteKodlari
+                      join ss in _context.SigortaSirketleri on ak.SigortaSirketiId equals ss.Id into ssJoin
+                      from ss in ssJoin.DefaultIfEmpty()
+                      where ak.Id == request.Id
+                      select new AcenteKoduDto
+                      {
+                          Id = ak.Id,
+                          SigortaSirketiId = ak.SigortaSirketiId,
+                          SigortaSirketiAdi = ss != null ? ss.Ad : "Bilinmiyor",
+                          AcenteKoduDeger = ak.AcenteKoduDeger,
+                          AcenteAdi = ak.AcenteAdi,
+                          DisAcente = ak.DisAcente,
+                          FirmaId = ak.FirmaId,
+                          EklenmeTarihi = ak.EklenmeTarihi,
+                          GuncellenmeTarihi = ak.GuncellenmeTarihi
+                      })
+                      .AsNoTracking()
+                      .FirstOrDefaultAsync(cancellationToken);
     }
 }
