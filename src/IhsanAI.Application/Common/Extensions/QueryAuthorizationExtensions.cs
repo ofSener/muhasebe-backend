@@ -1,0 +1,102 @@
+using System.Linq.Expressions;
+using IhsanAI.Application.Common.Interfaces;
+
+namespace IhsanAI.Application.Common.Extensions;
+
+/// <summary>
+/// Multi-tenant authorization için query extension metodları.
+/// Tüm veri sorgularında FirmaId kontrolü yapar.
+/// </summary>
+public static class QueryAuthorizationExtensions
+{
+    /// <summary>
+    /// Poliçe sorguları için FirmaId filtresi uygular.
+    /// SuperAdmin değilse sadece kendi firmasının poliçelerini görür.
+    /// </summary>
+    public static IQueryable<T> ApplyFirmaFilter<T>(
+        this IQueryable<T> query,
+        ICurrentUserService currentUser,
+        Expression<Func<T, int>> firmaIdSelector)
+    {
+        // SuperAdmin tüm verilere erişebilir
+        if (currentUser.IsSuperAdmin)
+        {
+            return query;
+        }
+
+        // Kullanıcının FirmaId'si yoksa boş sonuç döndür
+        if (!currentUser.FirmaId.HasValue)
+        {
+            return query.Where(_ => false);
+        }
+
+        var userFirmaId = currentUser.FirmaId.Value;
+
+        // Expression tree oluştur: x => firmaIdSelector(x) == userFirmaId
+        var parameter = firmaIdSelector.Parameters[0];
+        var body = Expression.Equal(
+            firmaIdSelector.Body,
+            Expression.Constant(userFirmaId));
+        var lambda = Expression.Lambda<Func<T, bool>>(body, parameter);
+
+        return query.Where(lambda);
+    }
+
+    /// <summary>
+    /// Nullable FirmaId için overload.
+    /// </summary>
+    public static IQueryable<T> ApplyFirmaFilterNullable<T>(
+        this IQueryable<T> query,
+        ICurrentUserService currentUser,
+        Expression<Func<T, int?>> firmaIdSelector)
+    {
+        // SuperAdmin tüm verilere erişebilir
+        if (currentUser.IsSuperAdmin)
+        {
+            return query;
+        }
+
+        // Kullanıcının FirmaId'si yoksa boş sonuç döndür
+        if (!currentUser.FirmaId.HasValue)
+        {
+            return query.Where(_ => false);
+        }
+
+        var userFirmaId = currentUser.FirmaId.Value;
+
+        // Expression tree oluştur: x => firmaIdSelector(x) == userFirmaId
+        var parameter = firmaIdSelector.Parameters[0];
+        var body = Expression.Equal(
+            firmaIdSelector.Body,
+            Expression.Convert(Expression.Constant(userFirmaId), typeof(int?)));
+        var lambda = Expression.Lambda<Func<T, bool>>(body, parameter);
+
+        return query.Where(lambda);
+    }
+
+    /// <summary>
+    /// Şube bazlı filtreleme için extension.
+    /// SubeId kontrolü yapar (opsiyonel).
+    /// </summary>
+    public static IQueryable<T> ApplySubeFilter<T>(
+        this IQueryable<T> query,
+        ICurrentUserService currentUser,
+        Expression<Func<T, int>> subeIdSelector)
+    {
+        // GorebilecegiPoliceler = "2" ise sadece kendi şubesini görür
+        if (currentUser.GorebilecegiPoliceler == "2" && currentUser.SubeId.HasValue)
+        {
+            var userSubeId = currentUser.SubeId.Value;
+
+            var parameter = subeIdSelector.Parameters[0];
+            var body = Expression.Equal(
+                subeIdSelector.Body,
+                Expression.Constant(userSubeId));
+            var lambda = Expression.Lambda<Func<T, bool>>(body, parameter);
+
+            return query.Where(lambda);
+        }
+
+        return query;
+    }
+}

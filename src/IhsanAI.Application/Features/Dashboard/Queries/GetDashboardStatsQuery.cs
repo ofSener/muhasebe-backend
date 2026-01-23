@@ -20,13 +20,17 @@ public record DashboardStatsResponse
     public decimal OncekiDonemBrutPrim { get; init; }
     public decimal OncekiDonemKomisyon { get; init; }
     public int OncekiDonemPoliceSayisi { get; init; }
+
+    // Hangi mod kullanıldı
+    public DashboardMode Mode { get; init; }
 }
 
 // Query
 public record GetDashboardStatsQuery(
     int? FirmaId = null,
     DateTime? StartDate = null,
-    DateTime? EndDate = null
+    DateTime? EndDate = null,
+    DashboardMode Mode = DashboardMode.Onayli
 ) : IRequest<DashboardStatsResponse>;
 
 // Handler
@@ -48,40 +52,54 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
 
     public async Task<DashboardStatsResponse> Handle(GetDashboardStatsQuery request, CancellationToken cancellationToken)
     {
-        // Firma ID belirleme
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
-
-        // Tarih aralığı belirleme (varsayılan: bu ay)
         var now = _dateTimeService.Now;
         var startDate = request.StartDate ?? new DateTime(now.Year, now.Month, 1);
         var endDate = request.EndDate ?? now;
 
-        // Önceki dönem hesaplama (aynı uzunlukta önceki dönem)
+        // Önceki dönem hesaplama
         var periodLength = (endDate - startDate).Days;
         var prevEndDate = startDate.AddDays(-1);
         var prevStartDate = prevEndDate.AddDays(-periodLength);
 
-        // Police sorgusu
-        var policeQuery = _context.Policeler.AsQueryable();
+        if (request.Mode == DashboardMode.Yakalama)
+        {
+            return await GetYakalamaStats(firmaId, startDate, endDate, prevStartDate, prevEndDate, cancellationToken);
+        }
+
+        return await GetOnayliStats(firmaId, startDate, endDate, prevStartDate, prevEndDate, cancellationToken);
+    }
+
+    private async Task<DashboardStatsResponse> GetOnayliStats(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        DateTime prevStartDate,
+        DateTime prevEndDate,
+        CancellationToken cancellationToken)
+    {
+        // Onaylı poliçeler (OnayDurumu = 1)
+        var policeQuery = _context.Policeler
+            .Where(p => p.OnayDurumu == 1);
 
         if (firmaId.HasValue)
         {
             policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
         }
 
-        // Mevcut dönem poliçeleri
+        // Mevcut dönem
         var currentPoliceler = await policeQuery
             .Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Önceki dönem poliçeleri
+        // Önceki dönem
         var prevPoliceler = await policeQuery
             .Where(p => p.TanzimTarihi >= prevStartDate && p.TanzimTarihi <= prevEndDate)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Toplam (tüm zamanlar) poliçe sayısı
+        // Toplam poliçe sayısı (tüm zamanlar)
         var toplamPoliceSayisi = await policeQuery.CountAsync(cancellationToken);
 
         // Müşteri sayısı
@@ -92,15 +110,15 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
         }
         var toplamMusteriSayisi = await musteriQuery.CountAsync(cancellationToken);
 
-        // Bekleyen (yakalanan) poliçeler
-        var yakalananQuery = _context.YakalananPoliceler.AsQueryable();
+        // Bekleyen (havuzdaki) poliçeler (OnayDurumu = 0)
+        var bekleyenQuery = _context.Policeler.Where(p => p.OnayDurumu == 0);
         if (firmaId.HasValue)
         {
-            yakalananQuery = yakalananQuery.Where(y => y.FirmaId == firmaId.Value);
+            bekleyenQuery = bekleyenQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
         }
-        var bekleyenPoliceler = await yakalananQuery.AsNoTracking().ToListAsync(cancellationToken);
+        var bekleyenPoliceler = await bekleyenQuery.AsNoTracking().ToListAsync(cancellationToken);
 
-        // Aktif çalışan sayısı (Onay = 1 olan kullanıcılar)
+        // Aktif çalışan sayısı
         var calisanQuery = _context.Kullanicilar.AsQueryable();
         if (firmaId.HasValue)
         {
@@ -118,11 +136,78 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
             ToplamNetPrim = currentPoliceler.Sum(p => p.NetPrim),
             ToplamKomisyon = currentPoliceler.Sum(p => p.Komisyon),
             BekleyenPoliceSayisi = bekleyenPoliceler.Count,
-            BekleyenPrim = (decimal)bekleyenPoliceler.Sum(y => y.BrutPrim),
+            BekleyenPrim = bekleyenPoliceler.Sum(p => p.BrutPrim),
             AktifCalisanSayisi = aktifCalisanSayisi,
             OncekiDonemBrutPrim = prevPoliceler.Sum(p => p.BrutPrim),
             OncekiDonemKomisyon = prevPoliceler.Sum(p => p.Komisyon),
-            OncekiDonemPoliceSayisi = prevPoliceler.Count
+            OncekiDonemPoliceSayisi = prevPoliceler.Count,
+            Mode = DashboardMode.Onayli
+        };
+    }
+
+    private async Task<DashboardStatsResponse> GetYakalamaStats(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        DateTime prevStartDate,
+        DateTime prevEndDate,
+        CancellationToken cancellationToken)
+    {
+        // Yakalanan poliçeler
+        var yakalamaQuery = _context.YakalananPoliceler.AsQueryable();
+
+        if (firmaId.HasValue)
+        {
+            yakalamaQuery = yakalamaQuery.Where(y => y.FirmaId == firmaId.Value);
+        }
+
+        // Mevcut dönem
+        var currentYakalanan = await yakalamaQuery
+            .Where(y => y.TanzimTarihi >= startDate && y.TanzimTarihi <= endDate)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        // Önceki dönem
+        var prevYakalanan = await yakalamaQuery
+            .Where(y => y.TanzimTarihi >= prevStartDate && y.TanzimTarihi <= prevEndDate)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        // Toplam yakalanan poliçe sayısı
+        var toplamPoliceSayisi = await yakalamaQuery.CountAsync(cancellationToken);
+
+        // Müşteri sayısı
+        var musteriQuery = _context.Musteriler.AsQueryable();
+        if (firmaId.HasValue)
+        {
+            musteriQuery = musteriQuery.Where(m => m.EkleyenFirmaId == firmaId.Value);
+        }
+        var toplamMusteriSayisi = await musteriQuery.CountAsync(cancellationToken);
+
+        // Aktif çalışan sayısı
+        var calisanQuery = _context.Kullanicilar.AsQueryable();
+        if (firmaId.HasValue)
+        {
+            calisanQuery = calisanQuery.Where(k => k.FirmaId == firmaId.Value);
+        }
+        var aktifCalisanSayisi = await calisanQuery
+            .Where(k => k.Onay == 1)
+            .CountAsync(cancellationToken);
+
+        return new DashboardStatsResponse
+        {
+            ToplamPoliceSayisi = toplamPoliceSayisi,
+            ToplamMusteriSayisi = toplamMusteriSayisi,
+            ToplamBrutPrim = (decimal)currentYakalanan.Sum(y => y.BrutPrim),
+            ToplamNetPrim = (decimal)currentYakalanan.Sum(y => y.NetPrim),
+            ToplamKomisyon = 0, // Yakalanan poliçelerde komisyon yok
+            BekleyenPoliceSayisi = toplamPoliceSayisi, // Tümü beklemede
+            BekleyenPrim = (decimal)currentYakalanan.Sum(y => y.BrutPrim),
+            AktifCalisanSayisi = aktifCalisanSayisi,
+            OncekiDonemBrutPrim = (decimal)prevYakalanan.Sum(y => y.BrutPrim),
+            OncekiDonemKomisyon = 0,
+            OncekiDonemPoliceSayisi = prevYakalanan.Count,
+            Mode = DashboardMode.Yakalama
         };
     }
 }

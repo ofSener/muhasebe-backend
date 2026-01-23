@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace IhsanAI.Domain.Entities;
 
-[Table("muhasebe_police")]
+[Table("muhasebe_police_v2")]
 public class Police
 {
     [Key]
@@ -93,6 +93,12 @@ public class Police
 
     [Column("KayitDurumu")]
     public sbyte KayitDurumu { get; set; }
+
+    /// <summary>
+    /// 0=Beklemede (Havuz), 1=Onaylandı, 2=Reddedildi
+    /// </summary>
+    [Column("OnayDurumu")]
+    public sbyte OnayDurumu { get; set; }
 
     [Column("EklenmeTarihi")]
     public DateTime EklenmeTarihi { get; set; }

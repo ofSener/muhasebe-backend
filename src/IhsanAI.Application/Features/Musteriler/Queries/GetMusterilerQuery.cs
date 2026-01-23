@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.Common.Extensions;
 using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.Musteriler.Queries;
@@ -10,20 +11,22 @@ public record GetMusterilerQuery(int? EkleyenFirmaId = null, int? Limit = 100) :
 public class GetMusterilerQueryHandler : IRequestHandler<GetMusterilerQuery, List<Musteri>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetMusterilerQueryHandler(IApplicationDbContext context)
+    public GetMusterilerQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<Musteri>> Handle(GetMusterilerQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Musteriler.AsQueryable();
 
-        if (request.EkleyenFirmaId.HasValue)
-        {
-            query = query.Where(x => x.EkleyenFirmaId == request.EkleyenFirmaId.Value);
-        }
+        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele, client'a güvenme!
+        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
 
         return await query
             .OrderByDescending(x => x.EklenmeZamani)
@@ -38,15 +41,24 @@ public record GetMusteriByIdQuery(int Id) : IRequest<Musteri?>;
 public class GetMusteriByIdQueryHandler : IRequestHandler<GetMusteriByIdQuery, Musteri?>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetMusteriByIdQueryHandler(IApplicationDbContext context)
+    public GetMusteriByIdQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Musteri?> Handle(GetMusteriByIdQuery request, CancellationToken cancellationToken)
     {
-        return await _context.Musteriler
+        var query = _context.Musteriler.AsQueryable();
+
+        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele
+        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
+
+        return await query
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
     }
@@ -67,20 +79,22 @@ public record SearchCustomersQuery(string Name, int? EkleyenFirmaId = null, int 
 public class SearchCustomersQueryHandler : IRequestHandler<SearchCustomersQuery, List<MusteriSearchDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public SearchCustomersQueryHandler(IApplicationDbContext context)
+    public SearchCustomersQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<MusteriSearchDto>> Handle(SearchCustomersQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Musteriler.AsQueryable();
 
-        if (request.EkleyenFirmaId.HasValue)
-        {
-            query = query.Where(x => x.EkleyenFirmaId == request.EkleyenFirmaId.Value);
-        }
+        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele, client'a güvenme!
+        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
 
         if (!string.IsNullOrWhiteSpace(request.Name))
         {

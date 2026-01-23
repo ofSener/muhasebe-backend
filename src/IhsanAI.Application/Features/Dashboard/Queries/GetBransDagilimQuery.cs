@@ -20,13 +20,15 @@ public record BransDagilimResponse
     public List<BransDagilimItem> Dagilim { get; init; } = new();
     public decimal ToplamPrim { get; init; }
     public int ToplamPolice { get; init; }
+    public DashboardMode Mode { get; init; }
 }
 
 // Query
 public record GetBransDagilimQuery(
     int? FirmaId = null,
     DateTime? StartDate = null,
-    DateTime? EndDate = null
+    DateTime? EndDate = null,
+    DashboardMode Mode = DashboardMode.Onayli
 ) : IRequest<BransDagilimResponse>;
 
 // Handler
@@ -53,7 +55,23 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
         var startDate = request.StartDate ?? new DateTime(now.Year, 1, 1);
         var endDate = request.EndDate ?? now;
 
-        var query = _context.Policeler.Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate);
+        if (request.Mode == DashboardMode.Yakalama)
+        {
+            return await GetYakalamaBransDagilim(firmaId, startDate, endDate, cancellationToken);
+        }
+
+        return await GetOnayliBransDagilim(firmaId, startDate, endDate, cancellationToken);
+    }
+
+    private async Task<BransDagilimResponse> GetOnayliBransDagilim(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        CancellationToken cancellationToken)
+    {
+        var query = _context.Policeler
+            .Where(p => p.OnayDurumu == 1)
+            .Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate);
 
         if (firmaId.HasValue)
         {
@@ -64,7 +82,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
 
         if (policeler.Count == 0)
         {
-            return new BransDagilimResponse { Dagilim = new List<BransDagilimItem>() };
+            return new BransDagilimResponse { Dagilim = new List<BransDagilimItem>(), Mode = DashboardMode.Onayli };
         }
 
         // Branşları Dictionary ile O(1) lookup
@@ -101,7 +119,69 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
         {
             Dagilim = dagilim,
             ToplamPrim = toplamPrim,
-            ToplamPolice = toplamPolice
+            ToplamPolice = toplamPolice,
+            Mode = DashboardMode.Onayli
+        };
+    }
+
+    private async Task<BransDagilimResponse> GetYakalamaBransDagilim(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        CancellationToken cancellationToken)
+    {
+        var query = _context.YakalananPoliceler
+            .Where(y => y.TanzimTarihi >= startDate && y.TanzimTarihi <= endDate);
+
+        if (firmaId.HasValue)
+        {
+            query = query.Where(y => y.FirmaId == firmaId.Value);
+        }
+
+        var yakalananlar = await query.AsNoTracking().ToListAsync(cancellationToken);
+
+        if (yakalananlar.Count == 0)
+        {
+            return new BransDagilimResponse { Dagilim = new List<BransDagilimItem>(), Mode = DashboardMode.Yakalama };
+        }
+
+        // PoliceTuru'na göre grupla (YakalananPolice'de BransId yerine PoliceTuru var)
+        var policeTuruIds = yakalananlar.Select(y => y.PoliceTuru).Distinct().ToList();
+        var bransDict = (await _context.Branslar
+            .Where(b => policeTuruIds.Contains(b.Id))
+            .Select(b => new { b.Id, b.Ad })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken))
+            .ToDictionary(b => b.Id);
+
+        var toplamPrim = (decimal)yakalananlar.Sum(y => y.BrutPrim);
+        var toplamPolice = yakalananlar.Count;
+
+        var dagilim = yakalananlar
+            .GroupBy(y => y.PoliceTuru)
+            .Select(g =>
+            {
+                bransDict.TryGetValue(g.Key, out var brans);
+                var brutPrim = (decimal)g.Sum(y => y.BrutPrim);
+                return new BransDagilimItem
+                {
+                    BransId = g.Key,
+                    BransAdi = brans?.Ad ?? $"Branş #{g.Key}",
+                    PoliceSayisi = g.Count(),
+                    ToplamBrutPrim = brutPrim,
+                    ToplamKomisyon = 0, // Yakalanan poliçelerde komisyon yok
+                    Yuzde = toplamPrim > 0 ? Math.Round(brutPrim / toplamPrim * 100, 1) : 0
+                };
+            })
+            .OrderByDescending(x => x.ToplamBrutPrim)
+            .ToList();
+
+        return new BransDagilimResponse
+        {
+            Dagilim = dagilim,
+            ToplamPrim = toplamPrim,
+            ToplamPolice = toplamPolice,
+            Mode = DashboardMode.Yakalama
         };
     }
 }

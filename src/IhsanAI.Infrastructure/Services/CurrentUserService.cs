@@ -21,6 +21,11 @@ public class CurrentUserService : ICurrentUserService
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
     public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;
 
+    /// <summary>
+    /// GorebilecegiPoliceler = "1" olan kullanıcılar tüm firmaların verilerine erişebilir.
+    /// </summary>
+    public bool IsSuperAdmin => GorebilecegiPoliceler == "1";
+
     private int? GetClaimAsInt(string claimType)
     {
         var value = _httpContextAccessor.HttpContext?.User?.FindFirst(claimType)?.Value;

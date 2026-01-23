@@ -21,6 +21,7 @@ public record SirketDagilimResponse
     public List<SirketDagilimItem> Dagilim { get; init; } = new();
     public decimal ToplamPrim { get; init; }
     public int ToplamPolice { get; init; }
+    public DashboardMode Mode { get; init; }
 }
 
 // Query
@@ -28,7 +29,8 @@ public record GetSirketDagilimQuery(
     int? FirmaId = null,
     DateTime? StartDate = null,
     DateTime? EndDate = null,
-    int Limit = 10
+    int Limit = 10,
+    DashboardMode Mode = DashboardMode.Onayli
 ) : IRequest<SirketDagilimResponse>;
 
 // Handler
@@ -52,12 +54,26 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
     {
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
         var now = _dateTimeService.Now;
-        var startDate = request.StartDate ?? new DateTime(now.Year, 1, 1); // Yıl başından itibaren
+        var startDate = request.StartDate ?? new DateTime(now.Year, 1, 1);
         var endDate = request.EndDate ?? now;
         var limit = Math.Min(Math.Max(request.Limit, 1), 50);
 
-        // Poliçeleri getir
-        var policeQuery = _context.Policeler.AsQueryable();
+        if (request.Mode == DashboardMode.Yakalama)
+        {
+            return await GetYakalamaSirketDagilim(firmaId, startDate, endDate, limit, cancellationToken);
+        }
+
+        return await GetOnayliSirketDagilim(firmaId, startDate, endDate, limit, cancellationToken);
+    }
+
+    private async Task<SirketDagilimResponse> GetOnayliSirketDagilim(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
         if (firmaId.HasValue)
         {
             policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
@@ -68,7 +84,6 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Sigorta şirketlerini getir
         var sirketIds = policeler.Select(p => p.SigortaSirketiId).Distinct().ToList();
         var sirketler = await _context.SigortaSirketleri
             .Where(s => sirketIds.Contains(s.Id))
@@ -79,7 +94,6 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
         var toplamPrim = policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
 
-        // Şirket dağılımı hesapla
         var dagilim = policeler
             .GroupBy(p => p.SigortaSirketiId)
             .Select(g =>
@@ -106,7 +120,67 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
         {
             Dagilim = dagilim,
             ToplamPrim = toplamPrim,
-            ToplamPolice = toplamPolice
+            ToplamPolice = toplamPolice,
+            Mode = DashboardMode.Onayli
+        };
+    }
+
+    private async Task<SirketDagilimResponse> GetYakalamaSirketDagilim(
+        int? firmaId,
+        DateTime startDate,
+        DateTime endDate,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var yakalamaQuery = _context.YakalananPoliceler.AsQueryable();
+        if (firmaId.HasValue)
+        {
+            yakalamaQuery = yakalamaQuery.Where(y => y.FirmaId == firmaId.Value);
+        }
+
+        var yakalananlar = await yakalamaQuery
+            .Where(y => y.TanzimTarihi >= startDate && y.TanzimTarihi <= endDate)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var sirketIds = yakalananlar.Select(y => y.SigortaSirketi).Distinct().ToList();
+        var sirketler = await _context.SigortaSirketleri
+            .Where(s => sirketIds.Contains(s.Id))
+            .Select(s => new { s.Id, s.Ad, s.Kod })
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var toplamPrim = (decimal)yakalananlar.Sum(y => y.BrutPrim);
+        var toplamPolice = yakalananlar.Count;
+
+        var dagilim = yakalananlar
+            .GroupBy(y => y.SigortaSirketi)
+            .Select(g =>
+            {
+                var sirket = sirketler.FirstOrDefault(s => s.Id == g.Key);
+                var brutPrim = (decimal)g.Sum(y => y.BrutPrim);
+
+                return new SirketDagilimItem
+                {
+                    SirketId = g.Key,
+                    SirketAdi = sirket?.Ad ?? $"Şirket #{g.Key}",
+                    SirketKodu = sirket?.Kod ?? "",
+                    PoliceSayisi = g.Count(),
+                    ToplamBrutPrim = brutPrim,
+                    ToplamKomisyon = 0, // Yakalanan poliçelerde komisyon yok
+                    Yuzde = toplamPrim > 0 ? Math.Round(brutPrim / toplamPrim * 100, 1) : 0
+                };
+            })
+            .OrderByDescending(x => x.ToplamBrutPrim)
+            .Take(limit)
+            .ToList();
+
+        return new SirketDagilimResponse
+        {
+            Dagilim = dagilim,
+            ToplamPrim = toplamPrim,
+            ToplamPolice = toplamPolice,
+            Mode = DashboardMode.Yakalama
         };
     }
 }

@@ -9,4 +9,10 @@ public interface ICurrentUserService
     bool IsCompanyAdmin { get; }
     bool IsAuthenticated { get; }
     string? GorebilecegiPoliceler { get; }
+
+    /// <summary>
+    /// Kullanıcı SuperAdmin mi? (Tüm firmaların verilerine erişebilir)
+    /// GorebilecegiPoliceler = "1" olan kullanıcılar SuperAdmin sayılır.
+    /// </summary>
+    bool IsSuperAdmin { get; }
 }
