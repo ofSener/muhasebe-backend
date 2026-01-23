@@ -33,7 +33,7 @@ public static class AuthEndpoints
                 {
                     HttpOnly = true,      // JavaScript erişemez - XSS koruması
                     Secure = true,        // Sadece HTTPS üzerinden gönderilir
-                    SameSite = SameSiteMode.Strict,  // CSRF koruması
+                    SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
                     Expires = DateTimeOffset.UtcNow.AddDays(RefreshTokenExpiryDays),
                     Path = "/api/auth"    // Sadece auth endpoint'lerinde gönderilir
                 });
@@ -85,7 +85,7 @@ public static class AuthEndpoints
                 {
                     HttpOnly = true,
                     Secure = true,
-                    SameSite = SameSiteMode.Strict,
+                    SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
                     Expires = DateTimeOffset.UtcNow.AddDays(RefreshTokenExpiryDays),
                     Path = "/api/auth"
                 });
@@ -129,7 +129,7 @@ public static class AuthEndpoints
             {
                 HttpOnly = true,
                 Secure = true,
-                SameSite = SameSiteMode.Strict,
+                SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
                 Path = "/api/auth"
             });
 
