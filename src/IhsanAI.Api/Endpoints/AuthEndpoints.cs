@@ -35,19 +35,20 @@ public static class AuthEndpoints
                     Secure = true,        // Sadece HTTPS üzerinden gönderilir
                     SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
                     Expires = DateTimeOffset.UtcNow.AddDays(RefreshTokenExpiryDays),
-                    Path = "/api/auth"    // Sadece auth endpoint'lerinde gönderilir
+                    Path = "/",           // Tüm path'lerde gönderilir
+                    Domain = ".sigorta.teklifi.al"  // Tüm subdomain'lerde geçerli
                 });
             }
 
-            // Access token response'da döndürülür (kısa ömürlü, memory'de tutulacak)
+            // Access token ve refresh token response'da döndürülür
             return Results.Ok(new
             {
                 result.Success,
                 result.Message,
                 result.Token,          // Access token - frontend memory'de tutacak
+                result.RefreshToken,   // Refresh token - frontend localStorage'da tutacak
                 result.ExpiresIn,
                 result.User
-                // RefreshToken response'da YOK - cookie'de
             });
         })
         .WithName("Login")
@@ -55,10 +56,15 @@ public static class AuthEndpoints
         .AllowAnonymous();
 
         // POST /api/auth/refresh - Yeni access token almak için
-        group.MapPost("/refresh", async (HttpContext httpContext, IMediator mediator) =>
+        group.MapPost("/refresh", async (RefreshRequest? request, HttpContext httpContext, IMediator mediator) =>
         {
-            // HttpOnly cookie'den refresh token'ı al
-            var refreshToken = httpContext.Request.Cookies[RefreshTokenCookieName];
+            // Önce request body'den, yoksa cookie'den refresh token'ı al
+            var refreshToken = request?.RefreshToken;
+
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                refreshToken = httpContext.Request.Cookies[RefreshTokenCookieName];
+            }
 
             if (string.IsNullOrEmpty(refreshToken))
             {
@@ -73,7 +79,8 @@ public static class AuthEndpoints
                 // Geçersiz refresh token - cookie'yi sil
                 httpContext.Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
                 {
-                    Path = "/api/auth"
+                    Path = "/",
+                    Domain = ".sigorta.teklifi.al"
                 });
                 return Results.Json(new { success = false, error = result.Message }, statusCode: 401);
             }
@@ -87,7 +94,8 @@ public static class AuthEndpoints
                     Secure = true,
                     SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
                     Expires = DateTimeOffset.UtcNow.AddDays(RefreshTokenExpiryDays),
-                    Path = "/api/auth"
+                    Path = "/",
+                    Domain = ".sigorta.teklifi.al"  // Tüm subdomain'lerde geçerli
                 });
             }
 
@@ -95,6 +103,7 @@ public static class AuthEndpoints
             {
                 result.Success,
                 result.Token,
+                result.RefreshToken,  // Yeni refresh token - frontend localStorage'da güncelleyecek
                 result.ExpiresIn
             });
         })
@@ -130,7 +139,8 @@ public static class AuthEndpoints
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,  // Cross-origin cookie paylaşımı için gerekli
-                Path = "/api/auth"
+                Path = "/",
+                Domain = ".sigorta.teklifi.al"  // Tüm subdomain'lerde geçerli
             });
 
             return Results.Ok(new { success = true, message = "Başarıyla çıkış yapıldı" });
@@ -142,3 +152,6 @@ public static class AuthEndpoints
         return app;
     }
 }
+
+// Request DTO for refresh endpoint
+public record RefreshRequest(string? RefreshToken);
