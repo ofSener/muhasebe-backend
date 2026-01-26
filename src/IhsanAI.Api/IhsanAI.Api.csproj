@@ -23,4 +23,12 @@
     <ProjectReference Include="..\IhsanAI.Shared\IhsanAI.Shared.csproj" />
   </ItemGroup>
 
+  <!-- Copy .env file to output directory -->
+  <ItemGroup>
+    <None Include=".env" Condition="Exists('.env')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

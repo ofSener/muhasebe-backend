@@ -35,6 +35,8 @@ public record KullaniciListDto
     public sbyte? AnaYoneticimi { get; init; }
     public int? MuhasebeYetkiId { get; init; }
     public string? YetkiAdi { get; init; }
+    public int? SubeId { get; init; }
+    public string? SubeAdi { get; init; }
     public sbyte? Onay { get; init; }
     public DateTime? KayitTarihi { get; init; }
     public int PoliceSayisi { get; init; }
@@ -42,4 +44,34 @@ public record KullaniciListDto
 
     public string AdSoyad => $"{Adi} {Soyadi}".Trim();
     public bool Aktif => Onay == 1 && !IsEski;
+}
+
+public record YakalananPoliceDto
+{
+    public int Id { get; init; }
+    public int SigortaSirketi { get; init; }
+    public int PoliceTuru { get; init; }
+    public string PoliceNumarasi { get; init; } = string.Empty;
+    public string Plaka { get; init; } = string.Empty;
+    public DateTime TanzimTarihi { get; init; }
+    public DateTime BaslangicTarihi { get; init; }
+    public DateTime BitisTarihi { get; init; }
+    public float BrutPrim { get; init; }
+    public float NetPrim { get; init; }
+    public string? SigortaliAdi { get; init; }
+    public int ProduktorId { get; init; }
+    public int ProduktorSubeId { get; init; }
+    public int UyeId { get; init; }
+    public int SubeId { get; init; }
+    public string? SubeAdi { get; init; }
+    public int FirmaId { get; init; }
+    public int? MusteriId { get; init; }
+    public int? CepTelefonu { get; init; }
+    public int? GuncelleyenUyeId { get; init; }
+    public sbyte? DisPolice { get; init; }
+    public string? AcenteAdi { get; init; }
+    public string AcenteNo { get; init; } = string.Empty;
+    public DateTime EklenmeTarihi { get; init; }
+    public DateTime? GuncellenmeTarihi { get; init; }
+    public string? Aciklama { get; init; }
 }

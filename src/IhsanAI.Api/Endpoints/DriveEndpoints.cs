@@ -34,9 +34,13 @@ public static class DriveEndpoints
         .WithDescription("Yukleme gecmisini getirir");
 
         // POST - Initiate OAuth connection
-        group.MapPost("/connect", async (IMediator mediator) =>
+        group.MapPost("/connect", async (HttpContext httpContext, IMediator mediator) =>
         {
-            var result = await mediator.Send(new InitiateDriveConnectionCommand());
+            // Dinamik RedirectUri olustur (Omer: 36100, Musti: 36200, Live: production URL)
+            var request = httpContext.Request;
+            var redirectUri = $"{request.Scheme}://{request.Host}/api/drive/oauth/callback";
+
+            var result = await mediator.Send(new InitiateDriveConnectionCommand(redirectUri));
             return Results.Ok(result);
         })
         .WithName("InitiateDriveConnection")
@@ -140,13 +144,23 @@ public static class DriveEndpoints
         .AllowAnonymous();
 
         // OAuth callback - Anonymous (no auth required for Google redirect)
-        app.MapGet("/api/drive/oauth/callback", async (string code, string state, IMediator mediator, IConfiguration configuration) =>
+        app.MapGet("/api/drive/oauth/callback", async (HttpContext httpContext, string code, string state, IMediator mediator, IConfiguration configuration) =>
         {
             try
             {
-                await mediator.Send(new CompleteDriveConnectionCommand(code, state));
-                // Redirect to frontend success page
-                var frontendUrl = configuration["Frontend:BaseUrl"] ?? "";
+                // Dinamik RedirectUri olustur (token exchange icin ayni URI kullanilmali)
+                var request = httpContext.Request;
+                var redirectUri = $"{request.Scheme}://{request.Host}/api/drive/oauth/callback";
+
+                await mediator.Send(new CompleteDriveConnectionCommand(code, state, redirectUri));
+
+                // Frontend URL'ini de dinamik belirle
+                var frontendUrl = configuration["Frontend:BaseUrl"];
+                if (string.IsNullOrEmpty(frontendUrl))
+                {
+                    // Eger yapilandirma yoksa, ayni host'u kullan (port farki olabilir)
+                    frontendUrl = $"{request.Scheme}://{request.Host.Host}:3000";
+                }
                 return Results.Redirect($"{frontendUrl}/pages/settings/drive-integration.html?connected=true");
             }
             catch (Exception ex)

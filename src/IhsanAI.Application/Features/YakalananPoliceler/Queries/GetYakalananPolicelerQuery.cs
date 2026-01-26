@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.DTOs;
 using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.YakalananPoliceler.Queries;
@@ -11,9 +12,9 @@ public record GetYakalananPolicelerQuery(
     string? SortBy = null,
     string? SortDir = null,
     int? Limit = 500
-) : IRequest<List<YakalananPolice>>;
+) : IRequest<List<YakalananPoliceDto>>;
 
-public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPolicelerQuery, List<YakalananPolice>>
+public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPolicelerQuery, List<YakalananPoliceDto>>
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
@@ -26,7 +27,7 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
         _currentUserService = currentUserService;
     }
 
-    public async Task<List<YakalananPolice>> Handle(GetYakalananPolicelerQuery request, CancellationToken cancellationToken)
+    public async Task<List<YakalananPoliceDto>> Handle(GetYakalananPolicelerQuery request, CancellationToken cancellationToken)
     {
         var query = _context.YakalananPoliceler
             .AsQueryable()
@@ -62,14 +63,48 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
 
         return await query
             .Take(request.Limit ?? 500)
+            .GroupJoin(
+                _context.Subeler,
+                p => p.SubeId,
+                s => s.Id,
+                (p, subeler) => new { p, sube = subeler.FirstOrDefault() })
+            .Select(x => new YakalananPoliceDto
+            {
+                Id = x.p.Id,
+                SigortaSirketi = x.p.SigortaSirketi,
+                PoliceTuru = x.p.PoliceTuru,
+                PoliceNumarasi = x.p.PoliceNumarasi,
+                Plaka = x.p.Plaka,
+                TanzimTarihi = x.p.TanzimTarihi,
+                BaslangicTarihi = x.p.BaslangicTarihi,
+                BitisTarihi = x.p.BitisTarihi,
+                BrutPrim = x.p.BrutPrim,
+                NetPrim = x.p.NetPrim,
+                SigortaliAdi = x.p.SigortaliAdi,
+                ProduktorId = x.p.ProduktorId,
+                ProduktorSubeId = x.p.ProduktorSubeId,
+                UyeId = x.p.UyeId,
+                SubeId = x.p.SubeId,
+                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
+                FirmaId = x.p.FirmaId,
+                MusteriId = x.p.MusteriId,
+                CepTelefonu = x.p.CepTelefonu,
+                GuncelleyenUyeId = x.p.GuncelleyenUyeId,
+                DisPolice = x.p.DisPolice,
+                AcenteAdi = x.p.AcenteAdi,
+                AcenteNo = x.p.AcenteNo,
+                EklenmeTarihi = x.p.EklenmeTarihi,
+                GuncellenmeTarihi = x.p.GuncellenmeTarihi,
+                Aciklama = x.p.Aciklama
+            })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 }
 
-public record GetYakalananPoliceByIdQuery(int Id) : IRequest<YakalananPolice?>;
+public record GetYakalananPoliceByIdQuery(int Id) : IRequest<YakalananPoliceDto?>;
 
-public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPoliceByIdQuery, YakalananPolice?>
+public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPoliceByIdQuery, YakalananPoliceDto?>
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
@@ -82,11 +117,45 @@ public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPo
         _currentUserService = currentUserService;
     }
 
-    public async Task<YakalananPolice?> Handle(GetYakalananPoliceByIdQuery request, CancellationToken cancellationToken)
+    public async Task<YakalananPoliceDto?> Handle(GetYakalananPoliceByIdQuery request, CancellationToken cancellationToken)
     {
         return await _context.YakalananPoliceler
             .Where(x => x.Id == request.Id)
             .ApplyAuthorizationFilters(_currentUserService)
+            .GroupJoin(
+                _context.Subeler,
+                p => p.SubeId,
+                s => s.Id,
+                (p, subeler) => new { p, sube = subeler.FirstOrDefault() })
+            .Select(x => new YakalananPoliceDto
+            {
+                Id = x.p.Id,
+                SigortaSirketi = x.p.SigortaSirketi,
+                PoliceTuru = x.p.PoliceTuru,
+                PoliceNumarasi = x.p.PoliceNumarasi,
+                Plaka = x.p.Plaka,
+                TanzimTarihi = x.p.TanzimTarihi,
+                BaslangicTarihi = x.p.BaslangicTarihi,
+                BitisTarihi = x.p.BitisTarihi,
+                BrutPrim = x.p.BrutPrim,
+                NetPrim = x.p.NetPrim,
+                SigortaliAdi = x.p.SigortaliAdi,
+                ProduktorId = x.p.ProduktorId,
+                ProduktorSubeId = x.p.ProduktorSubeId,
+                UyeId = x.p.UyeId,
+                SubeId = x.p.SubeId,
+                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
+                FirmaId = x.p.FirmaId,
+                MusteriId = x.p.MusteriId,
+                CepTelefonu = x.p.CepTelefonu,
+                GuncelleyenUyeId = x.p.GuncelleyenUyeId,
+                DisPolice = x.p.DisPolice,
+                AcenteAdi = x.p.AcenteAdi,
+                AcenteNo = x.p.AcenteNo,
+                EklenmeTarihi = x.p.EklenmeTarihi,
+                GuncellenmeTarihi = x.p.GuncellenmeTarihi,
+                Aciklama = x.p.Aciklama
+            })
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
     }
