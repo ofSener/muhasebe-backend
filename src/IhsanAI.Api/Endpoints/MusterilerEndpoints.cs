@@ -20,6 +20,14 @@ public static class MusterilerEndpoints
         .WithName("GetMusteriler")
         .WithDescription("Müşterileri listeler");
 
+        group.MapGet("/stats", async (IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetCustomerStatsQuery());
+            return Results.Ok(result);
+        })
+        .WithName("GetCustomerStats")
+        .WithDescription("Müşteri istatistiklerini getirir");
+
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
             var result = await mediator.Send(new GetMusteriByIdQuery(id));
@@ -43,6 +51,24 @@ public static class MusterilerEndpoints
         })
         .WithName("CreateCustomer")
         .WithDescription("Yeni müşteri oluşturur");
+
+        group.MapPut("/{id:int}", async (int id, UpdateCustomerCommand command, IMediator mediator) =>
+        {
+            // Ensure the ID from route matches the command
+            var commandWithId = command with { Id = id };
+            var result = await mediator.Send(commandWithId);
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("UpdateCustomer")
+        .WithDescription("Müşteri bilgilerini günceller");
+
+        group.MapDelete("/{id:int}", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new DeleteCustomerCommand(id));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("DeleteCustomer")
+        .WithDescription("Müşteriyi siler");
 
         return app;
     }
