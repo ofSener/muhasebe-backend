@@ -4,50 +4,71 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Quick Sigorta Excel parser
-/// Kolon mapping: PoliceNo, BrutPrimTL, BaslamaTarihi
-/// Not: Ana veri "PoliceListesi" sheet'inde
+/// Sheet: PoliceListesi
+/// Kolonlar: PoliceNo, YenilemeNo, ZeyilNo, ZeyilAd, UrunAd, BaslamaTarihi, BitisTarihi,
+/// TanzimTarihi, NetPrimTL, BrutPrimTL, AcenteKomisyonTL, AcenteAd
+/// NOT: Quick formatında TC/VKN, Plaka, Sigortalı Adı YOKTUR!
 /// </summary>
 public class QuickExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 2; // Quick Sigorta ID'si
+    public override int SigortaSirketiId => 3; // Quick Sigorta ID'si
     public override string SirketAdi => "Quick Sigorta";
-    public override string[] FileNamePatterns => new[] { "quick", "qck" };
+    public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck" };
 
     protected override string[] RequiredColumns => new[]
     {
-        "PoliceNo", "BrutPrimTL", "BaslamaTarihi"
+        "PoliceNo", "BrutPrim", "BaslamaTarihi"
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
     {
         var result = new List<ExcelImportRowDto>();
-        int rowNumber = 1;
+        int rowNumber = 0;
 
         foreach (var row in rows)
         {
             rowNumber++;
 
+            // Poliçe No'yu al - Quick formatında "PoliceNo"
+            var policeNo = GetStringValue(row, "PoliceNo");
+
+            // Boş satırları atla
+            if (string.IsNullOrWhiteSpace(policeNo))
+                continue;
+
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
-                PoliceNo = GetStringValue(row, "PoliceNo", "Poliçe No", "Police No"),
-                ZeyilNo = GetZeyilNo(GetStringValue(row, "ZeyilNo", "Zeyil No")).ToString(),
-                YenilemeNo = GetStringValue(row, "YenilemeNo", "Yenileme No"),
-                Plaka = GetStringValue(row, "Plaka", "AracPlaka"),
-                TanzimTarihi = GetDateValue(row, "TanzimTarihi", "Tanzim Tarihi", "DuzenlenmeTarihi"),
-                BaslangicTarihi = GetDateValue(row, "BaslamaTarihi", "Başlama Tarihi", "BaslangicTarihi"),
-                BitisTarihi = GetDateValue(row, "BitisTarihi", "Bitiş Tarihi", "SonlanmaTarihi"),
-                BrutPrim = GetDecimalValue(row, "BrutPrimTL", "BrutPrim", "Brüt Prim"),
-                NetPrim = GetDecimalValue(row, "NetPrimTL", "NetPrim", "Net Prim"),
-                Komisyon = GetDecimalValue(row, "KomisyonTL", "Komisyon", "Komisyon Tutarı"),
-                Vergi = GetDecimalValue(row, "VergiTL", "Vergi", "Vergi Tutarı"),
-                SigortaliAdi = GetStringValue(row, "SigortaliAdi", "Sigortalı Adı", "MusteriAdi"),
-                TcVkn = GetStringValue(row, "TcKimlikNo", "TcNo", "TC", "VKN", "VergiNo"),
-                PoliceTipi = DetectPoliceTipi(row),
-                UrunAdi = DetectUrunAdi(row) ?? GetStringValue(row, "UrunAdi", "Ürün", "Brans", "BransAdi"),
-                AcenteAdi = GetStringValue(row, "AcenteAdi", "Acente"),
-                Sube = GetStringValue(row, "SubeAdi", "Sube", "Şube"),
-                PoliceKesenPersonel = GetStringValue(row, "PersonelAdi", "Personel", "Uretici")
+                PoliceNo = policeNo,
+                YenilemeNo = GetStringValue(row, "YenilemeNo"),
+                ZeyilNo = GetStringValue(row, "ZeyilNo"),
+
+                // Tarihler
+                TanzimTarihi = GetDateValue(row, "TanzimTarihi"),
+                BaslangicTarihi = GetDateValue(row, "BaslamaTarihi"),
+                BitisTarihi = GetDateValue(row, "BitisTarihi"),
+
+                // Prim ve komisyon - Quick'te TL versiyonu var
+                BrutPrim = GetDecimalValue(row, "BrutPrimTL", "BrutPrim"),
+                NetPrim = GetDecimalValue(row, "NetPrimTL", "NetPrim"),
+                Komisyon = GetDecimalValue(row, "AcenteKomisyonTL", "AcenteKomisyon"),
+                Vergi = null, // Quick'te vergi yok
+
+                // Quick'te Sigortalı, TC/VKN ve Plaka YOKTUR
+                SigortaliAdi = null,
+                TcVkn = null,
+                Plaka = null,
+
+                // Poliçe tipi - ZeyilAd kolonundan
+                PoliceTipi = GetPoliceTipi(row),
+
+                // Ürün adı
+                UrunAdi = GetStringValue(row, "UrunAd"),
+
+                // Acente bilgisi
+                AcenteAdi = GetStringValue(row, "AcenteAd")?.Trim(),
+                Sube = null,
+                PoliceKesenPersonel = GetStringValue(row, "Kullanici")
             };
 
             // Tanzim tarihi yoksa başlangıç tarihini kullan
@@ -68,5 +89,39 @@ public class QuickExcelParser : BaseExcelParser
         }
 
         return result;
+    }
+
+    private string GetPoliceTipi(IDictionary<string, object?> row)
+    {
+        var zeyilAd = GetStringValue(row, "ZeyilAd");
+
+        if (string.IsNullOrEmpty(zeyilAd))
+        {
+            var brutPrim = GetDecimalValue(row, "BrutPrimTL", "BrutPrim");
+            return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
+        }
+
+        return zeyilAd.ToUpperInvariant().Contains("İPTAL") ||
+               zeyilAd.ToUpperInvariant().Contains("IPTAL")
+            ? "İPTAL"
+            : "TAHAKKUK";
+    }
+
+    protected override List<string> ValidateRow(ExcelImportRowDto row)
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(row.PoliceNo))
+            errors.Add("Poliçe No boş olamaz");
+
+        if (!row.BaslangicTarihi.HasValue)
+            errors.Add("Başlangıç Tarihi geçersiz");
+
+        if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
+            errors.Add("Brüt Prim boş veya sıfır");
+
+        // Quick'te TC/VKN, Plaka, Sigortalı zorunlu değil
+
+        return errors;
     }
 }

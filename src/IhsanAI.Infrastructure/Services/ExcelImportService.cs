@@ -36,12 +36,12 @@ public class ExcelImportService : IExcelImportService
         // Parser'ları kaydet
         _parsers = new List<IExcelParser>
         {
+            new SompoExcelParser(),
             new AnkaraExcelParser(),
             new QuickExcelParser(),
             new HepiyiExcelParser(),
             new NeovaExcelParser(),
-            new UnicoExcelParser(),
-            new SompoExcelParser()
+            new UnicoExcelParser()
         };
 
         // EPPlus lisans ayarı (non-commercial)
@@ -57,8 +57,33 @@ public class ExcelImportService : IExcelImportService
 
         try
         {
-            // Excel verilerini oku
-            var rows = await ReadExcelFileAsync(fileStream, fileName);
+            // Parser seç (dosya adından)
+            IExcelParser? parser = null;
+
+            if (sigortaSirketiId.HasValue)
+            {
+                parser = _parsers.FirstOrDefault(p => p.SigortaSirketiId == sigortaSirketiId.Value);
+            }
+
+            if (parser == null)
+            {
+                // Dosya adından otomatik tespit
+                var fileNameLower = fileName.ToLowerInvariant();
+                parser = _parsers.FirstOrDefault(p =>
+                    p.FileNamePatterns.Any(pattern => fileNameLower.Contains(pattern.ToLowerInvariant())));
+            }
+
+            if (parser == null)
+            {
+                // Default: Ankara parser
+                parser = _parsers.First(p => p.SirketAdi.Contains("Ankara"));
+                _logger.LogWarning("Parser otomatik tespit edilemedi, default parser kullanılıyor: {Parser}", parser.SirketAdi);
+            }
+
+            _logger.LogInformation("Parser seçildi: {Parser}", parser.SirketAdi);
+
+            // Excel verilerini oku (parser'a özel)
+            var rows = await ReadExcelFileAsync(fileStream, fileName, parser);
 
             if (rows.Count == 0)
             {
@@ -67,34 +92,10 @@ public class ExcelImportService : IExcelImportService
                     TotalRows = 0,
                     ValidRows = 0,
                     InvalidRows = 0,
-                    Rows = new List<ExcelImportRowDto>()
+                    Rows = new List<ExcelImportRowDto>(),
+                    DetectedFormat = parser.SirketAdi
                 };
             }
-
-            // Parser seç
-            var headers = rows.First().Keys.ToList();
-            IExcelParser? parser = null;
-
-            if (sigortaSirketiId.HasValue)
-            {
-                // Kullanıcının seçtiği şirkete göre parser bul
-                parser = _parsers.FirstOrDefault(p => p.SigortaSirketiId == sigortaSirketiId.Value);
-            }
-
-            if (parser == null)
-            {
-                // Otomatik tespit
-                parser = _parsers.FirstOrDefault(p => p.CanParse(fileName, headers));
-            }
-
-            if (parser == null)
-            {
-                // Default parser (ilk uygun olanı kullan)
-                parser = _parsers.First();
-                _logger.LogWarning("Parser otomatik tespit edilemedi, default parser kullanılıyor: {Parser}", parser.SirketAdi);
-            }
-
-            _logger.LogInformation("Parser seçildi: {Parser}", parser.SirketAdi);
 
             // Parse et
             var parsedRows = parser.Parse(rows);
@@ -188,10 +189,9 @@ public class ExcelImportService : IExcelImportService
                 var musteriId = row.MusteriId;
                 if (!musteriId.HasValue && !string.IsNullOrEmpty(row.TcVkn))
                 {
-                    // Müşteriyi bul veya oluştur
                     var musteri = await FindOrCreateMusteriAsync(row);
                     musteriId = musteri.Id;
-                    if (musteri.Id == 0) // Yeni oluşturuldu
+                    if (musteri.Id == 0)
                     {
                         _context.Musteriler.Add(musteri);
                         await _context.SaveChangesAsync();
@@ -225,7 +225,7 @@ public class ExcelImportService : IExcelImportService
                     EklenmeTarihi = _dateTimeService.Now,
                     KayitDurumu = 1,
                     DisPolice = 0,
-                    PoliceTespitKaynakId = 3, // Excel import
+                    PoliceTespitKaynakId = 3,
                     Sube = row.Sube,
                     PoliceKesenPersonel = row.PoliceKesenPersonel
                 };
@@ -245,10 +245,7 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        // Değişiklikleri kaydet
         await _context.SaveChangesAsync();
-
-        // Cache'den sil
         _cache.Remove(sessionId);
 
         _logger.LogInformation(
@@ -273,18 +270,17 @@ public class ExcelImportService : IExcelImportService
 
         foreach (var parser in _parsers)
         {
-            // DB'den şirket bilgisini al
+            var searchName = parser.SirketAdi.ToLower().Split(' ')[0];
             var sirket = await _context.SigortaSirketleri
-                .FirstOrDefaultAsync(s => s.Ad.Contains(parser.SirketAdi) ||
-                                         parser.FileNamePatterns.Any(p => s.Ad.ToLower().Contains(p)));
+                .FirstOrDefaultAsync(s => s.Ad.ToLower().Contains(searchName));
 
             formats.Add(new SupportedFormatDto
             {
                 SigortaSirketiId = sirket?.Id ?? parser.SigortaSirketiId,
                 SigortaSirketiAdi = sirket?.Ad ?? parser.SirketAdi,
                 FormatDescription = $"{parser.SirketAdi} Excel formatı",
-                RequiredColumns = new List<string> { "Poliçe No", "Brüt Prim", "Başlangıç Tarihi", "Bitiş Tarihi" },
-                Notes = parser.SirketAdi == "Sompo Sigorta"
+                RequiredColumns = new List<string> { "Poliçe No", "Brüt Prim", "Başlangıç Tarihi" },
+                Notes = parser.SirketAdi.Contains("Sompo")
                     ? "Header 2. satırda, ilk satır firma bilgisi"
                     : null
             });
@@ -295,8 +291,6 @@ public class ExcelImportService : IExcelImportService
 
     public Task<ImportHistoryListDto> GetImportHistoryAsync(int? firmaId, int page = 1, int pageSize = 20)
     {
-        // TODO: Import history için ayrı bir tablo oluşturulabilir
-        // Şimdilik boş liste döndür
         return Task.FromResult(new ImportHistoryListDto
         {
             Items = new List<ImportHistoryDto>(),
@@ -321,30 +315,62 @@ public class ExcelImportService : IExcelImportService
 
     #region Private Methods
 
-    private async Task<List<IDictionary<string, object?>>> ReadExcelFileAsync(Stream fileStream, string fileName)
+    private async Task<List<IDictionary<string, object?>>> ReadExcelFileAsync(Stream fileStream, string fileName, IExcelParser parser)
     {
         var rows = new List<IDictionary<string, object?>>();
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
+        // SOMPO formatı için özel işlem: header 2. satırda
+        var isSompoFormat = parser.SirketAdi.Contains("Sompo");
+        var headerRowIndex = isSompoFormat ? 2 : 1; // 1-indexed
+
         if (extension == ".xlsx")
         {
-            // EPPlus kullan (.xlsx için)
             using var package = new ExcelPackage(fileStream);
             var worksheet = package.Workbook.Worksheets.FirstOrDefault();
 
             if (worksheet == null || worksheet.Dimension == null)
                 return rows;
 
-            // Header'ları al (ilk satır)
+            // Header satırını bul
             var headers = new List<string>();
-            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+            var actualHeaderRow = headerRowIndex;
+
+            // SOMPO formatında gerçek header'ları bul
+            if (isSompoFormat)
             {
-                var header = worksheet.Cells[1, col].Value?.ToString()?.Trim();
-                headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
+                // 2. satırdaki header'ları al
+                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                {
+                    var cellValue = worksheet.Cells[2, col].Value?.ToString()?.Trim();
+
+                    // İlk hücre "Ürün No" ise veya null ise
+                    if (col == 1)
+                    {
+                        headers.Add(cellValue ?? "UrunNo");
+                    }
+                    else
+                    {
+                        headers.Add(cellValue ?? $"Column_{col}");
+                    }
+                }
+                actualHeaderRow = 2;
+            }
+            else
+            {
+                // Normal format: ilk satır header
+                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                {
+                    var header = worksheet.Cells[1, col].Value?.ToString()?.Trim();
+                    headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
+                }
+                actualHeaderRow = 1;
             }
 
+            _logger.LogInformation("Headers found: {Headers}", string.Join(", ", headers));
+
             // Veri satırlarını oku
-            for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+            for (int row = actualHeaderRow + 1; row <= worksheet.Dimension.End.Row; row++)
             {
                 var rowData = new Dictionary<string, object?>();
                 bool hasData = false;
@@ -352,22 +378,26 @@ public class ExcelImportService : IExcelImportService
                 for (int col = 1; col <= headers.Count; col++)
                 {
                     var cellValue = worksheet.Cells[row, col].Value;
-                    rowData[headers[col - 1]] = cellValue;
+                    var headerName = headers[col - 1];
+                    rowData[headerName] = cellValue;
+
                     if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue.ToString()))
                         hasData = true;
                 }
 
-                if (hasData)
+                // Boş satırları veya özet satırlarını atla
+                if (hasData && !IsSkippableRow(rowData, isSompoFormat))
+                {
                     rows.Add(rowData);
+                }
             }
         }
         else if (extension == ".xls")
         {
-            // ExcelDataReader kullan (.xls için)
             using var reader = ExcelReaderFactory.CreateReader(fileStream);
             var result = reader.AsDataSet(new ExcelDataSetConfiguration
             {
-                ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = true }
+                ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
             });
 
             if (result.Tables.Count == 0)
@@ -375,17 +405,23 @@ public class ExcelImportService : IExcelImportService
 
             var table = result.Tables[0];
 
-            // Header'ları al
+            if (table.Rows.Count < headerRowIndex)
+                return rows;
+
+            // Header satırını al
             var headers = new List<string>();
+            var headerRow = table.Rows[headerRowIndex - 1]; // 0-indexed
+
             for (int col = 0; col < table.Columns.Count; col++)
             {
-                var header = table.Columns[col].ColumnName;
+                var header = headerRow[col]?.ToString()?.Trim();
                 headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
             }
 
             // Veri satırlarını oku
-            foreach (System.Data.DataRow dataRow in table.Rows)
+            for (int rowIdx = headerRowIndex; rowIdx < table.Rows.Count; rowIdx++)
             {
+                var dataRow = table.Rows[rowIdx];
                 var rowData = new Dictionary<string, object?>();
                 bool hasData = false;
 
@@ -398,13 +434,12 @@ public class ExcelImportService : IExcelImportService
                         hasData = true;
                 }
 
-                if (hasData)
+                if (hasData && !IsSkippableRow(rowData, isSompoFormat))
                     rows.Add(rowData);
             }
         }
         else if (extension == ".csv")
         {
-            // CSV okuma
             fileStream.Position = 0;
             using var reader = new StreamReader(fileStream, Encoding.UTF8);
             var headerLine = await reader.ReadLineAsync();
@@ -439,35 +474,51 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
+        _logger.LogInformation("Total rows read: {Count}", rows.Count);
         return rows;
+    }
+
+    private bool IsSkippableRow(IDictionary<string, object?> row, bool isSompoFormat)
+    {
+        // Özet satırlarını atla (Tahakkuk, İptal, Net, Brüt Prim gibi)
+        var firstValue = row.Values.FirstOrDefault()?.ToString()?.ToUpperInvariant();
+
+        if (string.IsNullOrEmpty(firstValue))
+            return true;
+
+        var skipKeywords = new[] { "TAHAKKUK", "İPTAL", "IPTAL", "NET", "BRÜT", "BRUT", "TOPLAM", "NET PRİM", "BRÜT PRİM" };
+
+        if (skipKeywords.Any(k => firstValue.Contains(k)))
+            return true;
+
+        // SOMPO formatında tarih aralığı satırını atla
+        if (isSompoFormat && firstValue.Contains("/") && firstValue.Contains("-"))
+            return true;
+
+        return false;
     }
 
     private async Task EnrichRowsWithLookupDataAsync(List<ExcelImportRowDto> rows)
     {
-        // Tüm TC/VKN'leri topla
         var tcVknList = rows
             .Where(r => !string.IsNullOrEmpty(r.TcVkn))
             .Select(r => r.TcVkn!)
             .Distinct()
             .ToList();
 
-        // Mevcut müşterileri sorgula
         var existingCustomers = await _context.Musteriler
             .Where(m => tcVknList.Contains(m.TcKimlikNo!) ||
                        tcVknList.Contains(m.VergiNo!) ||
                        tcVknList.Contains(m.TcVergiNo!))
             .ToListAsync();
 
-        // Branşları al
         var branslar = await _context.Branslar.ToListAsync();
         var policeTurleri = await _context.PoliceTurleri.ToListAsync();
 
-        // Her satır için eşleştirme yap
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
 
-            // Müşteri eşleştirme
             if (!string.IsNullOrEmpty(row.TcVkn))
             {
                 var musteri = existingCustomers.FirstOrDefault(m =>
@@ -481,12 +532,10 @@ public class ExcelImportService : IExcelImportService
                 }
             }
 
-            // Branş eşleştirme
             if (!string.IsNullOrEmpty(row.UrunAdi))
             {
                 var urunAdiUpper = row.UrunAdi.ToUpperInvariant();
 
-                // Önce PoliceTuru'ndan ara
                 var policeTuru = policeTurleri.FirstOrDefault(p =>
                     p.Turu != null && urunAdiUpper.Contains(p.Turu.ToUpperInvariant()));
 
@@ -496,7 +545,6 @@ public class ExcelImportService : IExcelImportService
                 }
                 else
                 {
-                    // Sonra Brans'tan ara
                     var brans = branslar.FirstOrDefault(b =>
                         urunAdiUpper.Contains(b.Ad.ToUpperInvariant()) ||
                         b.Ad.ToUpperInvariant().Contains(urunAdiUpper));
@@ -512,7 +560,6 @@ public class ExcelImportService : IExcelImportService
 
     private async Task<Musteri> FindOrCreateMusteriAsync(ExcelImportRowDto row)
     {
-        // Mevcut müşteriyi ara
         var existingMusteri = await _context.Musteriler
             .FirstOrDefaultAsync(m =>
                 m.TcKimlikNo == row.TcVkn ||
@@ -522,13 +569,12 @@ public class ExcelImportService : IExcelImportService
         if (existingMusteri != null)
             return existingMusteri;
 
-        // Yeni müşteri oluştur
         var isIndividual = row.TcVkn?.Length == 11;
         var nameParts = (row.SigortaliAdi ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         return new Musteri
         {
-            SahipTuru = (sbyte)(isIndividual ? 1 : 2), // 1: Bireysel, 2: Kurumsal
+            SahipTuru = (sbyte)(isIndividual ? 1 : 2),
             TcKimlikNo = isIndividual ? row.TcVkn : null,
             VergiNo = !isIndividual ? row.TcVkn : null,
             TcVergiNo = row.TcVkn,
@@ -559,9 +605,6 @@ public class ExcelImportService : IExcelImportService
     #endregion
 }
 
-/// <summary>
-/// Import session verisi (cache için)
-/// </summary>
 internal class ImportSessionData
 {
     public string SessionId { get; set; } = string.Empty;

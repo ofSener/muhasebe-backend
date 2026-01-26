@@ -152,7 +152,7 @@ public abstract class BaseExcelParser : IExcelParser
         return 0;
     }
 
-    protected static List<string> ValidateRow(ExcelImportRowDto row)
+    protected virtual List<string> ValidateRow(ExcelImportRowDto row)
     {
         var errors = new List<string>();
 
