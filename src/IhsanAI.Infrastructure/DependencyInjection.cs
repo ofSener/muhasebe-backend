@@ -40,6 +40,10 @@ public static class DependencyInjection
         services.AddTransient<IDateTimeService, DateTimeService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IGoogleDriveService, GoogleDriveService>();
+        services.AddScoped<IExcelImportService, ExcelImportService>();
+
+        // Memory Cache (Excel import session için)
+        services.AddMemoryCache();
 
         return services;
     }

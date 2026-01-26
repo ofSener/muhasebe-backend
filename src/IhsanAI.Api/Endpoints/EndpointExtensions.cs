@@ -24,6 +24,7 @@ public static class EndpointExtensions
         app.MapKazanclarEndpoints();
         app.MapDriveEndpoints();
         app.MapDashboardEndpoints();
+        app.MapExcelImportEndpoints();
 
         return app;
     }
