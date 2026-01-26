@@ -34,6 +34,11 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
                 k => k.MuhasebeYetkiId,
                 y => y.Id,
                 (k, yetkiler) => new { k, yetki = yetkiler.FirstOrDefault() })
+            .GroupJoin(
+                _context.Subeler,
+                x => x.k.SubeId,
+                s => s.Id,
+                (x, subeler) => new { x.k, x.yetki, sube = subeler.FirstOrDefault() })
             .Select(x => new KullaniciListDto
             {
                 Id = x.k.Id,
@@ -45,6 +50,8 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
                 AnaYoneticimi = x.k.AnaYoneticimi,
                 MuhasebeYetkiId = x.k.MuhasebeYetkiId,
                 YetkiAdi = x.yetki != null ? x.yetki.YetkiAdi : null,
+                SubeId = x.k.SubeId,
+                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
                 Onay = x.k.Onay,
                 KayitTarihi = x.k.KayitTarihi,
                 IsEski = false
@@ -63,19 +70,26 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         }
 
         var eskiKullanicilar = await eskiQuery
+            .GroupJoin(
+                _context.Subeler,
+                k => k.SubeId,
+                s => s.Id,
+                (k, subeler) => new { k, sube = subeler.FirstOrDefault() })
             .Select(x => new KullaniciListDto
             {
-                Id = x.Id,
-                Adi = x.Adi,
-                Soyadi = x.Soyadi,
-                Email = x.Email,
-                GsmNo = x.GsmNo,
-                KullaniciTuru = x.KullaniciTuru,
-                AnaYoneticimi = x.AnaYoneticimi,
+                Id = x.k.Id,
+                Adi = x.k.Adi,
+                Soyadi = x.k.Soyadi,
+                Email = x.k.Email,
+                GsmNo = x.k.GsmNo,
+                KullaniciTuru = x.k.KullaniciTuru,
+                AnaYoneticimi = x.k.AnaYoneticimi,
                 MuhasebeYetkiId = null,
                 YetkiAdi = null,
+                SubeId = x.k.SubeId,
+                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
                 Onay = 0, // Eski kullanıcılar her zaman Pasif
-                KayitTarihi = x.KayitTarihi,
+                KayitTarihi = x.k.KayitTarihi,
                 IsEski = true
             })
             .AsNoTracking()

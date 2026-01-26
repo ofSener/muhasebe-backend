@@ -144,6 +144,25 @@ public class GoogleDriveService : IGoogleDriveService
             if (result.Status == Google.Apis.Upload.UploadStatus.Completed)
             {
                 var file = request.ResponseBody;
+
+                // Dosyayi "baglantiya sahip herkes erisebilsin" olarak ayarla
+                try
+                {
+                    var permission = new Google.Apis.Drive.v3.Data.Permission
+                    {
+                        Type = "anyone",
+                        Role = "reader"
+                    };
+                    var permRequest = driveService.Permissions.Create(permission, file.Id);
+                    permRequest.Fields = "id";
+                    await permRequest.ExecuteAsync();
+                }
+                catch (Exception permEx)
+                {
+                    // Permission hatasi olursa dosya yine de yuklenmis olur, logla ve devam et
+                    System.Diagnostics.Debug.WriteLine($"Permission ekleme hatasi: {permEx.Message}");
+                }
+
                 return new DriveUploadResult(true, file.Id, file.WebViewLink, null);
             }
 

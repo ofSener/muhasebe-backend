@@ -6,8 +6,33 @@ using IhsanAI.Application;
 using IhsanAI.Infrastructure;
 using DotNetEnv;
 
-// Load .env file
-Env.Load();
+// Load .env file from application base directory
+var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+Console.WriteLine($"[ENV] Looking for .env at: {envPath}");
+Console.WriteLine($"[ENV] File exists: {File.Exists(envPath)}");
+
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+    Console.WriteLine("[ENV] Loaded from AppContext.BaseDirectory");
+}
+else
+{
+    // Try project directory
+    var projectEnvPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+    Console.WriteLine($"[ENV] Trying project directory: {projectEnvPath}");
+    Console.WriteLine($"[ENV] File exists: {File.Exists(projectEnvPath)}");
+
+    if (File.Exists(projectEnvPath))
+    {
+        Env.Load(projectEnvPath);
+        Console.WriteLine("[ENV] Loaded from CurrentDirectory");
+    }
+}
+
+// Debug: Check if env vars loaded
+var clientId = Environment.GetEnvironmentVariable("GoogleDrive__ClientId");
+Console.WriteLine($"[ENV] GoogleDrive__ClientId loaded: {!string.IsNullOrEmpty(clientId)}");
 
 var builder = WebApplication.CreateBuilder(args);
 
