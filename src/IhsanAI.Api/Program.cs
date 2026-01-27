@@ -39,12 +39,21 @@ var builder = WebApplication.CreateBuilder(args);
 // Add environment variables to configuration
 builder.Configuration.AddEnvironmentVariables();
 
+// Create logs directory with absolute path (IIS fix)
+var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+Directory.CreateDirectory(logsDirectory);
+var logPath = Path.Combine(logsDirectory, "ihsanai-.log");
+
+// Enable Serilog self-logging for debugging
+Serilog.Debugging.SelfLog.Enable(msg => File.AppendAllText(
+    Path.Combine(AppContext.BaseDirectory, "serilog-errors.txt"), msg + Environment.NewLine));
+
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
     .WriteTo.Console()
-    .WriteTo.File("logs/ihsanai-.log", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
 builder.Host.UseSerilog();
