@@ -4,14 +4,31 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Neova Sigorta Excel parser
-/// Kolonlar: POLİÇE NO, ZEYİL NO, ZEYİL TÜRÜ, TANZİM TARİHİ, BAŞLANGIÇ TARİHİ,
-/// BİTİŞ TARİHİ, MÜŞTERİ TCKN / VKN, MÜŞTERİ AD/ÜNVAN, NET PRİM, BRÜT PRİM,
-/// KOMİSYON, ACENTE ADI
-/// NOT: Neova formatında Plaka ve Yenileme No YOKTUR!
+/// Kolonlar büyük harf
+///
+/// MAPPING:
+/// - PoliceNo       <- "POLİÇE NO"                ✅
+/// - YenilemeNo     <- YOK                        ❌
+/// - ZeyilNo        <- "ZEYİL NO"                 ✅
+/// - ZeyilTipKodu   <- "ZEYİL TÜRÜ"               ✅
+/// - Brans          <- "FAALİYET KODU"            ⚠️
+/// - PoliceTipi     <- "G/T"                      ⚠️
+/// - TanzimTarihi   <- "TANZİM TARİHİ"            ✅
+/// - BaslangicTarihi<- "BAŞLANGIÇ TARİHİ"         ✅
+/// - BitisTarihi    <- "BİTİŞ TARİHİ"             ✅
+/// - ZeyilOnayTarihi<- YOK                        ❌
+/// - ZeyilBaslangicTarihi <- YOK                  ❌
+/// - BrutPrim       <- "BRÜT PRİM"                ✅
+/// - NetPrim        <- "NET PRİM"                 ✅
+/// - Komisyon       <- "KOMİSYON"                 ✅
+/// - SigortaliAdi   <- "MÜŞTERİ AD/ÜNVAN"         ✅
+/// - SigortaliSoyadi<- YOK (birleşik)             ❌
+/// - Plaka          <- YOK                        ❌
+/// - AcenteNo       <- "ACENTE KOD"               ✅
 /// </summary>
 public class NeovaExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 5; // Neova Sigorta ID'si
+    public override int SigortaSirketiId => 5;
     public override string SirketAdi => "Neova Sigorta";
     public override string[] FileNamePatterns => new[] { "neova", "nva" };
 
@@ -29,46 +46,44 @@ public class NeovaExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Poliçe No'yu al - Neova'da büyük harf
             var policeNo = GetStringValue(row, "POLİÇE NO", "Poliçe No");
 
-            // Boş satırları atla
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
 
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
+
+                // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
-                YenilemeNo = null, // Neova'da yenileme no yok
+                YenilemeNo = null,  // Neova'da yok
                 ZeyilNo = GetStringValue(row, "ZEYİL NO", "Zeyil No"),
+                ZeyilTipKodu = GetStringValue(row, "ZEYİL TÜRÜ", "Zeyil Türü"),
+                Brans = GetBransFromKod(row),
+                PoliceTipi = GetPoliceTipi(row),
 
                 // Tarihler
                 TanzimTarihi = GetDateValue(row, "TANZİM TARİHİ", "Tanzim Tarihi"),
                 BaslangicTarihi = GetDateValue(row, "BAŞLANGIÇ TARİHİ", "Başlangıç Tarihi"),
                 BitisTarihi = GetDateValue(row, "BİTİŞ TARİHİ", "Bitiş Tarihi"),
+                ZeyilOnayTarihi = null,  // Neova'da yok
+                ZeyilBaslangicTarihi = null,  // Neova'da yok
 
-                // Prim ve komisyon
+                // Primler
                 BrutPrim = GetDecimalValue(row, "BRÜT PRİM", "Brüt Prim"),
                 NetPrim = GetDecimalValue(row, "NET PRİM", "Net Prim"),
                 Komisyon = GetDecimalValue(row, "KOMİSYON", "Komisyon"),
-                Vergi = GetDecimalValue(row, "NET VERGİ", "Vergi"),
 
-                // Sigortalı bilgileri
+                // Müşteri Bilgileri
                 SigortaliAdi = GetStringValue(row, "MÜŞTERİ AD/ÜNVAN", "Müşteri Ad/Ünvan")?.Trim(),
-                TcVkn = GetStringValue(row, "MÜŞTERİ TCKN / VKN", "MÜŞTERİ TCKN/VKN", "TC/VKN"),
-                Plaka = null, // Neova'da plaka yok
+                SigortaliSoyadi = null,  // Neova'da birleşik
 
-                // Poliçe tipi
-                PoliceTipi = GetPoliceTipi(row),
+                // Araç Bilgileri
+                Plaka = null,  // Neova'da yok
 
-                // Ürün adı - KOD kolonundan tespit edilebilir
-                UrunAdi = DetectUrunFromKod(row),
-
-                // Acente bilgisi
-                AcenteAdi = GetStringValue(row, "ACENTE ADI", "Acente Adı"),
-                Sube = null,
-                PoliceKesenPersonel = GetStringValue(row, "TEMSİLCİ", "Temsilci")
+                // Acente Bilgileri
+                AcenteNo = GetStringValue(row, "ACENTE KOD", "Acente Kod")
             };
 
             // Tanzim tarihi yoksa başlangıç tarihini kullan
@@ -77,7 +92,6 @@ public class NeovaExcelParser : BaseExcelParser
                 dto = dto with { TanzimTarihi = dto.BaslangicTarihi };
             }
 
-            // Validation
             var errors = ValidateRow(dto);
             dto = dto with
             {
@@ -91,17 +105,22 @@ public class NeovaExcelParser : BaseExcelParser
         return result;
     }
 
-    private string? DetectUrunFromKod(IDictionary<string, object?> row)
+    private string? GetBransFromKod(IDictionary<string, object?> row)
     {
         var kod = GetStringValue(row, "KOD");
+        var faaliyetKodu = GetStringValue(row, "FAALİYET KODU");
 
-        return kod?.ToUpperInvariant() switch
+        // Önce KOD'a bak
+        var brans = kod?.ToUpperInvariant() switch
         {
             "TR4" => "TRAFİK",
             "K23" => "KASKO",
             "DSK" => "DASK",
             _ => null
         };
+
+        // KOD'dan bulunamazsa faaliyet kodunu döndür
+        return brans ?? faaliyetKodu;
     }
 
     private string GetPoliceTipi(IDictionary<string, object?> row)
@@ -137,8 +156,6 @@ public class NeovaExcelParser : BaseExcelParser
 
         if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
             errors.Add("Brüt Prim boş veya sıfır");
-
-        // TC/VKN varsa format kontrolü (ama zorunlu değil)
 
         return errors;
     }

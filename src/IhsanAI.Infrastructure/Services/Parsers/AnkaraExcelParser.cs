@@ -4,14 +4,30 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Ankara Sigorta Excel parser
-/// Kolonlar: Poliçe No, Yenileme No, Zeyil No, Tahakkuk / İptal, Brüt Prim ₺, Net Prim ₺,
-/// Komisyon ₺, Vergiler ₺, Poliçe Onay Tarihi, Poliçe Başlangıç Tarihi, Poliçe Bitiş Tarihi,
-/// Sigortalı Adı / Ünvanı, Plaka, Ürün, Partaj Adı
-/// NOT: Ankara formatında TC/VKN kolonu YOKTUR!
+///
+/// MAPPING:
+/// - PoliceNo       <- "Poliçe No"                   ✅
+/// - YenilemeNo     <- "Yenileme No"                 ✅
+/// - ZeyilNo        <- "Zeyil No"                    ✅
+/// - ZeyilTipKodu   <- "Zeyil Türü"                  ✅
+/// - Brans          <- "Branş"                       ✅
+/// - PoliceTipi     <- "Tahakkuk / İptal"            ✅
+/// - TanzimTarihi   <- "Poliçe Onay Tarihi"          ✅
+/// - BaslangicTarihi<- "Poliçe Başlangıç Tarihi"     ✅
+/// - BitisTarihi    <- "Poliçe Bitiş Tarihi"         ✅
+/// - ZeyilOnayTarihi<- "Zeyil Onay Tarihi"           ✅
+/// - ZeyilBaslangicTarihi <- "Zeyil Başlangıç Tarihi"✅
+/// - BrutPrim       <- "Brüt Prim ₺"                 ✅
+/// - NetPrim        <- "Net Prim ₺"                  ✅
+/// - Komisyon       <- "Komisyon ₺"                  ✅
+/// - SigortaliAdi   <- "Sigortalı Adı / Ünvanı"      ✅
+/// - SigortaliSoyadi<- YOK (birleşik)                ❌
+/// - Plaka          <- "Plaka"                       ✅
+/// - AcenteNo       <- "Partaj"                      ⚠️
 /// </summary>
 public class AnkaraExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 1; // Ankara Sigorta ID'si
+    public override int SigortaSirketiId => 1;
     public override string SirketAdi => "Ankara Sigorta";
     public override string[] FileNamePatterns => new[] { "ankara", "ank" };
 
@@ -29,60 +45,52 @@ public class AnkaraExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Poliçe No'yu al
             var policeNo = GetStringValue(row, "Poliçe No");
 
-            // Boş satırları atla
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
-
-            // Sigortalı adını birleştir
-            var sigortaliAdi = GetStringValue(row, "Sigortalı Adı / Ünvanı", "Sigortalı Adı", "Sigortalı Ünvanı");
 
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
+
+                // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
                 YenilemeNo = GetStringValue(row, "Yenileme No"),
                 ZeyilNo = GetStringValue(row, "Zeyil No"),
+                ZeyilTipKodu = GetStringValue(row, "Zeyil Türü"),
+                Brans = GetStringValue(row, "Branş"),
+                PoliceTipi = GetPoliceTipi(row),
 
-                // Tarihler - Ankara'da 3 farklı tarih var
-                TanzimTarihi = GetDateValue(row, "Poliçe Onay Tarihi", "Zeyil Onay Tarihi"),
-                BaslangicTarihi = GetDateValue(row, "Poliçe Başlangıç Tarihi", "Zeyil Başlangıç Tarihi"),
+                // Tarihler
+                TanzimTarihi = GetDateValue(row, "Poliçe Onay Tarihi"),
+                BaslangicTarihi = GetDateValue(row, "Poliçe Başlangıç Tarihi"),
                 BitisTarihi = GetDateValue(row, "Poliçe Bitiş Tarihi"),
+                ZeyilOnayTarihi = GetDateValue(row, "Zeyil Onay Tarihi"),
+                ZeyilBaslangicTarihi = GetDateValue(row, "Zeyil Başlangıç Tarihi"),
 
-                // Prim ve komisyon - Ankara'da TL sembolü var
+                // Primler
                 BrutPrim = GetDecimalValue(row, "Brüt Prim ₺", "Brüt Prim"),
                 NetPrim = GetDecimalValue(row, "Net Prim ₺", "Net Prim"),
                 Komisyon = GetDecimalValue(row, "Komisyon ₺", "Komisyon"),
-                Vergi = GetDecimalValue(row, "Vergiler ₺", "Vergi"),
 
-                // Sigortalı bilgileri
-                SigortaliAdi = sigortaliAdi?.Trim(),
+                // Müşteri Bilgileri
+                SigortaliAdi = GetStringValue(row, "Sigortalı Adı / Ünvanı")?.Trim(),
+                SigortaliSoyadi = null,  // Ankara'da birleşik
+
+                // Araç Bilgileri
                 Plaka = GetStringValue(row, "Plaka"),
 
-                // Ankara'da TC/VKN kolonu YOK
-                TcVkn = null,
-
-                // Poliçe tipi - Tahakkuk / İptal kolonu
-                PoliceTipi = GetPoliceTipi(row),
-
-                // Ürün adı - Ankara'da "Ürün" kolonu var
-                UrunAdi = GetStringValue(row, "Ürün", "Branş"),
-
-                // Acente bilgisi
-                AcenteAdi = GetStringValue(row, "Partaj Adı"),
-                Sube = null,
-                PoliceKesenPersonel = null
+                // Acente Bilgileri
+                AcenteNo = GetStringValue(row, "Partaj")  // Partaj kodu
             };
 
-            // Tanzim tarihi yoksa başlangıç tarihini kullan
+            // Tanzim tarihi yoksa poliçe onay tarihini kullan
             if (!dto.TanzimTarihi.HasValue && dto.BaslangicTarihi.HasValue)
             {
                 dto = dto with { TanzimTarihi = dto.BaslangicTarihi };
             }
 
-            // Validation
             var errors = ValidateRow(dto);
             dto = dto with
             {
@@ -102,7 +110,6 @@ public class AnkaraExcelParser : BaseExcelParser
 
         if (string.IsNullOrEmpty(tahakkukIptal))
         {
-            // Brüt prim negatifse iptal
             var brutPrim = GetDecimalValue(row, "Brüt Prim ₺", "Brüt Prim");
             return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
         }
@@ -125,8 +132,6 @@ public class AnkaraExcelParser : BaseExcelParser
 
         if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
             errors.Add("Brüt Prim boş veya sıfır");
-
-        // Ankara'da TC/VKN ve Plaka zorunlu değil
 
         return errors;
     }

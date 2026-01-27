@@ -4,13 +4,31 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Sompo Sigorta Excel parser
-/// SOMPO formatı: Header 2. satırda (ExcelImportService tarafından işlenir)
-/// Kolonlar: Poliçe No, Yenileme No, Zeyl No, Onay Tarihi, Sigortalı Ünvanı, Net Prim, Brüt Prim, Komisyon
-/// NOT: SOMPO formatında TC/VKN, Plaka, Bitiş Tarihi YOKTUR!
+/// Header 3. satırda (EPPlus 1-indexed)
+///
+/// MAPPING:
+/// - PoliceNo       <- "Poliçe No"        ✅
+/// - YenilemeNo     <- "Yenileme No"      ✅
+/// - ZeyilNo        <- "Zeyl No"          ✅
+/// - ZeyilTipKodu   <- YOK                ❌
+/// - Brans          <- "Ürün No" (kod)    ⚠️
+/// - PoliceTipi     <- YOK                ❌
+/// - TanzimTarihi   <- "Onay Tarihi"      ✅
+/// - BaslangicTarihi<- "Onay Tarihi"      ⚠️ (aynı)
+/// - BitisTarihi    <- YOK                ❌
+/// - ZeyilOnayTarihi<- YOK                ❌
+/// - ZeyilBaslangicTarihi <- YOK          ❌
+/// - BrutPrim       <- "Brüt Prim"        ✅
+/// - NetPrim        <- "Net Prim"         ✅
+/// - Komisyon       <- "Komisyon"         ✅
+/// - SigortaliAdi   <- "Sigortalı Ünvanı" ✅
+/// - SigortaliSoyadi<- YOK                ❌
+/// - Plaka          <- YOK                ❌
+/// - AcenteNo       <- YOK                ❌
 /// </summary>
 public class SompoExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 6; // Sompo Sigorta ID'si
+    public override int SigortaSirketiId => 6;
     public override string SirketAdi => "Sompo Sigorta";
     public override string[] FileNamePatterns => new[] { "sompo", "smp" };
 
@@ -35,59 +53,53 @@ public class SompoExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Poliçe No'yu al - SOMPO formatında tam olarak bu kolon adı
             var policeNo = GetStringValue(row, "Poliçe No");
 
             // Boş veya header satırlarını atla
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
 
-            // "Poliçe No" yazısını içeren header satırını atla
             if (policeNo.ToUpperInvariant().Contains("POLİÇE") ||
                 policeNo.ToUpperInvariant().Contains("POLICE"))
                 continue;
 
-            // Onay Tarihi'ni al - bu hem tanzim hem başlangıç tarihi olacak
             var onayTarihi = GetDateValue(row, "Onay Tarihi");
-
-            // Ürün adını dosya adından tespit et (DASK, KASKO vs)
-            var urunAdi = DetectUrunFromFileName(row);
 
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
+
+                // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
                 YenilemeNo = GetStringValue(row, "Yenileme No"),
-                ZeyilNo = GetStringValue(row, "Zeyl No", "Zeyil No"),
+                ZeyilNo = GetStringValue(row, "Zeyl No"),
+                ZeyilTipKodu = null,  // SOMPO'da yok
+                Brans = GetBransFromUrunNo(row),
+                PoliceTipi = GetPoliceTipiFromPrim(row),
 
-                // SOMPO'da sadece Onay Tarihi var, başlangıç ve bitiş yok
+                // Tarihler
                 TanzimTarihi = onayTarihi,
                 BaslangicTarihi = onayTarihi,
-                BitisTarihi = onayTarihi?.AddYears(1), // Varsayılan 1 yıl
+                BitisTarihi = null,  // SOMPO'da yok
+                ZeyilOnayTarihi = null,  // SOMPO'da yok
+                ZeyilBaslangicTarihi = null,  // SOMPO'da yok
 
-                // Prim ve komisyon bilgileri
-                NetPrim = GetDecimalValue(row, "Net Prim"),
+                // Primler
                 BrutPrim = GetDecimalValue(row, "Brüt Prim"),
+                NetPrim = GetDecimalValue(row, "Net Prim"),
                 Komisyon = GetDecimalValue(row, "Komisyon"),
 
-                // Sigortalı bilgileri
+                // Müşteri Bilgileri
                 SigortaliAdi = GetStringValue(row, "Sigortalı Ünvanı")?.Trim(),
+                SigortaliSoyadi = null,  // SOMPO'da yok
 
-                // SOMPO formatında TC/VKN ve Plaka yok
-                TcVkn = null,
-                Plaka = null,
+                // Araç Bilgileri
+                Plaka = null,  // SOMPO'da yok
 
-                // Ürün ve diğer bilgiler
-                UrunAdi = urunAdi,
-                PoliceTipi = DetectPoliceTipiFromRow(row),
-
-                // SOMPO'da acente/şube bilgisi yok
-                AcenteAdi = null,
-                Sube = null,
-                PoliceKesenPersonel = null
+                // Acente Bilgileri
+                AcenteNo = null  // SOMPO'da yok
             };
 
-            // Validation
             var errors = ValidateRow(dto);
             dto = dto with
             {
@@ -101,33 +113,25 @@ public class SompoExcelParser : BaseExcelParser
         return result;
     }
 
-    private string? DetectUrunFromFileName(IDictionary<string, object?> row)
+    private string? GetBransFromUrunNo(IDictionary<string, object?> row)
     {
-        // İlk kolondan ürün numarası alınabilir
-        var urunNo = GetStringValue(row, "Ürün No", "UrunNo");
+        var urunNo = GetStringValue(row, "Ürün No");
 
-        // Ürün numarasına göre mapping
         return urunNo switch
         {
             "117" => "DASK",
             "115" => "KASKO",
             "101" => "TRAFİK",
-            _ => null
+            "118" => "KONUT",
+            "119" => "İŞYERİ",
+            _ => urunNo  // Kod olarak döndür
         };
     }
 
-    private string DetectPoliceTipiFromRow(IDictionary<string, object?> row)
+    private string GetPoliceTipiFromPrim(IDictionary<string, object?> row)
     {
-        // SOMPO'da zeyil tipine bakılabilir
-        var zeyilNo = GetStringValue(row, "Zeyl No", "Zeyil No");
-
-        // Zeyil no > 0 ise ve prim negatifse iptal olabilir
         var brutPrim = GetDecimalValue(row, "Brüt Prim");
-
-        if (brutPrim < 0)
-            return "İPTAL";
-
-        return "TAHAKKUK";
+        return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
     }
 
     protected override List<string> ValidateRow(ExcelImportRowDto row)
@@ -137,14 +141,11 @@ public class SompoExcelParser : BaseExcelParser
         if (string.IsNullOrWhiteSpace(row.PoliceNo))
             errors.Add("Poliçe No boş olamaz");
 
-        if (!row.BaslangicTarihi.HasValue)
+        if (!row.TanzimTarihi.HasValue)
             errors.Add("Onay Tarihi geçersiz");
 
         if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
             errors.Add("Brüt Prim boş veya sıfır");
-
-        // SOMPO'da TC/VKN zorunlu değil
-        // SOMPO'da Plaka zorunlu değil
 
         return errors;
     }

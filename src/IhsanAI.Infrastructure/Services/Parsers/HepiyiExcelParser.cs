@@ -5,14 +5,31 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Hepiyi Sigorta Excel parser
-/// Kolonlar: Poliçe No, Zeyl No, Poliçe Tarih, Poliçe Bitiş Tarih, Tanzim Tarih,
-/// TC, Müşteri Ad – Soyad, Plaka, Net Prim, Brüt Prim, Komisyon, YENILEME_NO,
-/// URUN_ADI, ZEYIL_TIPI, VERGI_KIMLIK_NUMARASI, P Kaynak Adı
-/// NOT: Hepiyi formatında primler Türkçe format ("-7.141,35")
+/// Primler Türkçe format ("-7.141,35")
+///
+/// MAPPING:
+/// - PoliceNo       <- "Poliçe No"                ✅
+/// - YenilemeNo     <- "YENILEME_NO"              ✅
+/// - ZeyilNo        <- "Zeyl No"                  ✅
+/// - ZeyilTipKodu   <- "ZEYL_TIP_KODU"            ✅
+/// - Brans          <- "URUN_ADI"                 ✅
+/// - PoliceTipi     <- "ZEYIL_TIPI"               ✅
+/// - TanzimTarihi   <- "Tanzim Tarih"             ✅
+/// - BaslangicTarihi<- "Poliçe Tarih"             ✅
+/// - BitisTarihi    <- "Poliçe Bitiş Tarih"       ✅
+/// - ZeyilOnayTarihi<- YOK                        ❌
+/// - ZeyilBaslangicTarihi <- YOK                  ❌
+/// - BrutPrim       <- "Brüt Prim"                ✅
+/// - NetPrim        <- "Net Prim"                 ✅
+/// - Komisyon       <- "Komisyon"                 ✅
+/// - SigortaliAdi   <- "Müşteri Ad – Soyad"       ✅
+/// - SigortaliSoyadi<- YOK (birleşik)             ❌
+/// - Plaka          <- "Plaka"                    ✅
+/// - AcenteNo       <- "PARTAJ"                   ⚠️
 /// </summary>
 public class HepiyiExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 4; // Hepiyi Sigorta ID'si
+    public override int SigortaSirketiId => 4;
     public override string SirketAdi => "Hepiyi Sigorta";
     public override string[] FileNamePatterns => new[] { "hepiyi", "hepıyı", "hepi̇yi̇" };
 
@@ -30,56 +47,49 @@ public class HepiyiExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Poliçe No'yu al
             var policeNo = GetStringValue(row, "Poliçe No");
 
-            // Boş satırları atla
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
 
-            // TC veya VKN al - Hepiyi'de iki farklı kolon var
-            var tc = GetStringValue(row, "TC");
-            var vkn = GetStringValue(row, "VERGI_KIMLIK_NUMARASI");
-            var tcVkn = !string.IsNullOrEmpty(tc) ? tc : vkn;
-
-            // Sigortalı adı
-            var musteriAd = GetStringValue(row, "Müşteri Ad – Soyad", "Müşteri Ad - Soyad");
-            var musteriUnvani = GetStringValue(row, "MUSTERI_UNVANI");
-            var sigortaliAdi = !string.IsNullOrEmpty(musteriAd) ? musteriAd : musteriUnvani;
+            // Sigortalı adı - önce "Müşteri Ad – Soyad", yoksa "MUSTERI_UNVANI"
+            var sigortaliAdi = GetStringValue(row, "Müşteri Ad – Soyad", "Müşteri Ad - Soyad");
+            if (string.IsNullOrEmpty(sigortaliAdi))
+                sigortaliAdi = GetStringValue(row, "MUSTERI_UNVANI");
 
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
+
+                // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
                 YenilemeNo = GetStringValue(row, "YENILEME_NO"),
                 ZeyilNo = GetStringValue(row, "Zeyl No"),
+                ZeyilTipKodu = GetStringValue(row, "ZEYL_TIP_KODU"),
+                Brans = GetStringValue(row, "URUN_ADI"),
+                PoliceTipi = GetPoliceTipi(row),
 
-                // Tarihler - Hepiyi'de farklı format olabilir (DD/MM/YYYY)
+                // Tarihler
                 TanzimTarihi = GetDateValue(row, "Tanzim Tarih"),
                 BaslangicTarihi = GetDateValue(row, "Poliçe Tarih"),
                 BitisTarihi = GetDateValue(row, "Poliçe Bitiş Tarih"),
+                ZeyilOnayTarihi = null,  // Hepiyi'de yok
+                ZeyilBaslangicTarihi = null,  // Hepiyi'de yok
 
-                // Prim ve komisyon - Hepiyi'de Türkçe format ("-7.141,35")
+                // Primler - Türkçe format
                 BrutPrim = GetTurkishDecimalValue(row, "Brüt Prim"),
                 NetPrim = GetTurkishDecimalValue(row, "Net Prim"),
                 Komisyon = GetTurkishDecimalValue(row, "Komisyon"),
-                Vergi = GetTurkishDecimalValue(row, "GDV"),
 
-                // Sigortalı bilgileri
+                // Müşteri Bilgileri
                 SigortaliAdi = sigortaliAdi?.Trim(),
-                TcVkn = tcVkn,
+                SigortaliSoyadi = null,  // Hepiyi'de birleşik
+
+                // Araç Bilgileri
                 Plaka = GetStringValue(row, "Plaka"),
 
-                // Poliçe tipi
-                PoliceTipi = GetPoliceTipi(row),
-
-                // Ürün adı
-                UrunAdi = GetStringValue(row, "URUN_ADI"),
-
-                // Acente bilgisi
-                AcenteAdi = GetStringValue(row, "P Kaynak Adı", "PARTAJ"),
-                Sube = null,
-                PoliceKesenPersonel = GetStringValue(row, "SYS Kullanici Adi")
+                // Acente Bilgileri
+                AcenteNo = GetStringValue(row, "PARTAJ")  // Partaj kodu
             };
 
             // Tanzim tarihi yoksa başlangıç tarihini kullan
@@ -88,7 +98,6 @@ public class HepiyiExcelParser : BaseExcelParser
                 dto = dto with { TanzimTarihi = dto.BaslangicTarihi };
             }
 
-            // Validation
             var errors = ValidateRow(dto);
             dto = dto with
             {
@@ -165,8 +174,6 @@ public class HepiyiExcelParser : BaseExcelParser
 
         if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
             errors.Add("Brüt Prim boş veya sıfır");
-
-        // TC/VKN varsa format kontrolü - ama zorunlu değil
 
         return errors;
     }

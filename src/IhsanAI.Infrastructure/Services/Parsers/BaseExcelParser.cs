@@ -168,13 +168,7 @@ public abstract class BaseExcelParser : IExcelParser
         if (!row.BrutPrim.HasValue || row.BrutPrim <= 0)
             errors.Add("Brüt Prim geçersiz");
 
-        // TC/VKN doğrulama
-        if (!string.IsNullOrEmpty(row.TcVkn))
-        {
-            var tcVkn = row.TcVkn.Trim();
-            if (tcVkn.Length != 11 && tcVkn.Length != 10)
-                errors.Add("TC/VKN 10 veya 11 haneli olmalıdır");
-        }
+        // TC/VKN doğrulama kaldırıldı - artık DTO'da bu alan yok
 
         return errors;
     }

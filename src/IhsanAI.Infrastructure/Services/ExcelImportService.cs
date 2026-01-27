@@ -185,18 +185,20 @@ public class ExcelImportService : IExcelImportService
                     continue;
                 }
 
-                // Müşteri kontrolü ve oluşturma
+                // Müşteri kontrolü - TC/VKN olmadan isim ile arama yapılabilir
                 var musteriId = row.MusteriId;
-                if (!musteriId.HasValue && !string.IsNullOrEmpty(row.TcVkn))
+                if (!musteriId.HasValue && !string.IsNullOrEmpty(row.SigortaliAdi))
                 {
-                    var musteri = await FindOrCreateMusteriAsync(row);
-                    musteriId = musteri.Id;
-                    if (musteri.Id == 0)
+                    // İsim ile mevcut müşteri ara
+                    var sigortaliAdi = row.SigortaliAdi.Trim().ToUpperInvariant();
+                    var existingMusteri = await _context.Musteriler
+                        .FirstOrDefaultAsync(m =>
+                            (m.Adi + " " + m.Soyadi).ToUpper() == sigortaliAdi ||
+                            m.Adi!.ToUpper() == sigortaliAdi);
+
+                    if (existingMusteri != null)
                     {
-                        _context.Musteriler.Add(musteri);
-                        await _context.SaveChangesAsync();
-                        musteriId = musteri.Id;
-                        newCustomersCreated++;
+                        musteriId = existingMusteri.Id;
                     }
                 }
 
@@ -214,20 +216,20 @@ public class ExcelImportService : IExcelImportService
                     BitisTarihi = row.BitisTarihi ?? row.BaslangicTarihi?.AddYears(1) ?? _dateTimeService.Now.AddYears(1),
                     BrutPrim = row.BrutPrim ?? 0,
                     NetPrim = row.NetPrim ?? row.BrutPrim ?? 0,
-                    Vergi = row.Vergi ?? 0,
+                    Vergi = 0,  // Vergi kaldırıldı
                     Komisyon = row.Komisyon ?? 0,
                     BransId = row.BransId ?? 0,
                     MusteriId = musteriId ?? 0,
                     SigortaEttirenId = musteriId ?? 0,
-                    IsOrtagiFirmaId = row.IsOrtagiFirmaId ?? _currentUserService.FirmaId ?? 0,
-                    IsOrtagiSubeId = row.IsOrtagiSubeId ?? _currentUserService.SubeId ?? 0,
-                    IsOrtagiUyeId = row.IsOrtagiUyeId ?? 0,
+                    IsOrtagiFirmaId = _currentUserService.FirmaId ?? 0,
+                    IsOrtagiSubeId = _currentUserService.SubeId ?? 0,
+                    IsOrtagiUyeId = 0,
                     EklenmeTarihi = _dateTimeService.Now,
                     KayitDurumu = 1,
                     DisPolice = 0,
                     PoliceTespitKaynakId = 3,
-                    Sube = row.Sube,
-                    PoliceKesenPersonel = row.PoliceKesenPersonel
+                    Sube = null,
+                    PoliceKesenPersonel = null
                 };
 
                 _context.PoliceHavuzlari.Add(policeHavuz);
@@ -320,9 +322,10 @@ public class ExcelImportService : IExcelImportService
         var rows = new List<IDictionary<string, object?>>();
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
-        // SOMPO formatı için özel işlem: header 2. satırda
+        // SOMPO formatı için özel işlem: header 3. satırda (EPPlus 1-indexed)
+        // Row 1 = Firma adı, Row 2 = Tarih aralığı, Row 3 = Headers
         var isSompoFormat = parser.SirketAdi.Contains("Sompo");
-        var headerRowIndex = isSompoFormat ? 2 : 1; // 1-indexed
+        var headerRowIndex = isSompoFormat ? 3 : 1; // EPPlus 1-indexed
 
         if (extension == ".xlsx")
         {
@@ -339,22 +342,13 @@ public class ExcelImportService : IExcelImportService
             // SOMPO formatında gerçek header'ları bul
             if (isSompoFormat)
             {
-                // 2. satırdaki header'ları al
+                // 3. satırdaki (EPPlus row 3) header'ları al
                 for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
                 {
-                    var cellValue = worksheet.Cells[2, col].Value?.ToString()?.Trim();
-
-                    // İlk hücre "Ürün No" ise veya null ise
-                    if (col == 1)
-                    {
-                        headers.Add(cellValue ?? "UrunNo");
-                    }
-                    else
-                    {
-                        headers.Add(cellValue ?? $"Column_{col}");
-                    }
+                    var cellValue = worksheet.Cells[3, col].Value?.ToString()?.Trim();
+                    headers.Add(string.IsNullOrEmpty(cellValue) ? $"Column_{col}" : cellValue);
                 }
-                actualHeaderRow = 2;
+                actualHeaderRow = 3;
             }
             else
             {
@@ -500,18 +494,6 @@ public class ExcelImportService : IExcelImportService
 
     private async Task EnrichRowsWithLookupDataAsync(List<ExcelImportRowDto> rows)
     {
-        var tcVknList = rows
-            .Where(r => !string.IsNullOrEmpty(r.TcVkn))
-            .Select(r => r.TcVkn!)
-            .Distinct()
-            .ToList();
-
-        var existingCustomers = await _context.Musteriler
-            .Where(m => tcVknList.Contains(m.TcKimlikNo!) ||
-                       tcVknList.Contains(m.VergiNo!) ||
-                       tcVknList.Contains(m.TcVergiNo!))
-            .ToListAsync();
-
         var branslar = await _context.Branslar.ToListAsync();
         var policeTurleri = await _context.PoliceTurleri.ToListAsync();
 
@@ -519,25 +501,13 @@ public class ExcelImportService : IExcelImportService
         {
             var row = rows[i];
 
-            if (!string.IsNullOrEmpty(row.TcVkn))
+            // Branş eşleştirmesi
+            if (!string.IsNullOrEmpty(row.Brans))
             {
-                var musteri = existingCustomers.FirstOrDefault(m =>
-                    m.TcKimlikNo == row.TcVkn ||
-                    m.VergiNo == row.TcVkn ||
-                    m.TcVergiNo == row.TcVkn);
-
-                if (musteri != null)
-                {
-                    rows[i] = row with { MusteriId = musteri.Id };
-                }
-            }
-
-            if (!string.IsNullOrEmpty(row.UrunAdi))
-            {
-                var urunAdiUpper = row.UrunAdi.ToUpperInvariant();
+                var bransUpper = row.Brans.ToUpperInvariant();
 
                 var policeTuru = policeTurleri.FirstOrDefault(p =>
-                    p.Turu != null && urunAdiUpper.Contains(p.Turu.ToUpperInvariant()));
+                    p.Turu != null && bransUpper.Contains(p.Turu.ToUpperInvariant()));
 
                 if (policeTuru != null)
                 {
@@ -546,8 +516,8 @@ public class ExcelImportService : IExcelImportService
                 else
                 {
                     var brans = branslar.FirstOrDefault(b =>
-                        urunAdiUpper.Contains(b.Ad.ToUpperInvariant()) ||
-                        b.Ad.ToUpperInvariant().Contains(urunAdiUpper));
+                        bransUpper.Contains(b.Ad.ToUpperInvariant()) ||
+                        b.Ad.ToUpperInvariant().Contains(bransUpper));
 
                     if (brans != null)
                     {
@@ -558,33 +528,8 @@ public class ExcelImportService : IExcelImportService
         }
     }
 
-    private async Task<Musteri> FindOrCreateMusteriAsync(ExcelImportRowDto row)
-    {
-        var existingMusteri = await _context.Musteriler
-            .FirstOrDefaultAsync(m =>
-                m.TcKimlikNo == row.TcVkn ||
-                m.VergiNo == row.TcVkn ||
-                m.TcVergiNo == row.TcVkn);
-
-        if (existingMusteri != null)
-            return existingMusteri;
-
-        var isIndividual = row.TcVkn?.Length == 11;
-        var nameParts = (row.SigortaliAdi ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        return new Musteri
-        {
-            SahipTuru = (sbyte)(isIndividual ? 1 : 2),
-            TcKimlikNo = isIndividual ? row.TcVkn : null,
-            VergiNo = !isIndividual ? row.TcVkn : null,
-            TcVergiNo = row.TcVkn,
-            Adi = nameParts.Length > 0 ? string.Join(" ", nameParts.Take(nameParts.Length - 1)) : row.SigortaliAdi,
-            Soyadi = nameParts.Length > 1 ? nameParts.Last() : null,
-            EkleyenFirmaId = _currentUserService.FirmaId,
-            EkleyenSubeId = _currentUserService.SubeId,
-            EklenmeZamani = _dateTimeService.Now
-        };
-    }
+    // FindOrCreateMusteriAsync kaldırıldı - TC/VKN olmadan müşteri oluşturma devre dışı
+    // İleride SigortaliAdi ile müşteri eşleştirme/oluşturma eklenebilir
 
     private static sbyte GetZeyilNoAsSbyte(string? value)
     {

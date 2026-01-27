@@ -5,15 +5,31 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Unico (Aviva) Sigorta Excel parser
-/// Kolonlar: Poliçe No, Zeyl No, Yenileme No, Tanzim Tarihi, Başlama Tarihi,
-/// Bitiş Tarihi, Sigortalı Adı, Sigortalı Soyadı, Net Prim, Brüt Prim,
-/// Komisyon Tutarı, Tarife Adı, Acente Adı
-/// NOT: Unico formatında TC/VKN ve Plaka YOKTUR!
 /// Tarih formatı: "12/04/2025 00:00:00" (MM/DD/YYYY)
+///
+/// MAPPING:
+/// - PoliceNo       <- "Poliçe No"             ✅
+/// - YenilemeNo     <- "Yenileme No"           ✅
+/// - ZeyilNo        <- "Zeyl No"               ✅
+/// - ZeyilTipKodu   <- YOK                     ❌
+/// - Brans          <- "Tarife Adı"            ✅
+/// - PoliceTipi     <- YOK                     ❌
+/// - TanzimTarihi   <- "Tanzim Tarihi"         ✅
+/// - BaslangicTarihi<- "Başlama Tarihi"        ✅
+/// - BitisTarihi    <- "Bitiş Tarihi"          ✅
+/// - ZeyilOnayTarihi<- YOK                     ❌
+/// - ZeyilBaslangicTarihi <- YOK               ❌
+/// - BrutPrim       <- "Brüt Prim"             ✅
+/// - NetPrim        <- "Net Prim"              ✅
+/// - Komisyon       <- "Komisyon Tutarı"       ✅
+/// - SigortaliAdi   <- "Sigortalı Adı"         ✅
+/// - SigortaliSoyadi<- "Sigortalı Soyadı"      ✅
+/// - Plaka          <- YOK                     ❌
+/// - AcenteNo       <- "Acente No"             ✅
 /// </summary>
 public class UnicoExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 2; // Unico/Aviva Sigorta ID'si
+    public override int SigortaSirketiId => 2;
     public override string SirketAdi => "Unico Sigorta";
     public override string[] FileNamePatterns => new[] { "unico", "aviva", "unc" };
 
@@ -31,51 +47,44 @@ public class UnicoExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Poliçe No'yu al
             var policeNo = GetStringValue(row, "Poliçe No");
 
-            // Boş satırları atla
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
-
-            // Sigortalı adı - Unico'da Ad ve Soyad ayrı
-            var sigortaliAdi = GetStringValue(row, "Sigortalı Adı");
-            var sigortaliSoyadi = GetStringValue(row, "Sigortalı Soyadı");
-            var fullName = $"{sigortaliAdi} {sigortaliSoyadi}".Trim();
 
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
+
+                // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
                 YenilemeNo = GetStringValue(row, "Yenileme No"),
                 ZeyilNo = GetStringValue(row, "Zeyl No"),
+                ZeyilTipKodu = null,  // Unico'da yok
+                Brans = GetStringValue(row, "Tarife Adı"),
+                PoliceTipi = GetPoliceTipiFromPrim(row),
 
                 // Tarihler - Unico'da özel format
                 TanzimTarihi = GetUnicoDateValue(row, "Tanzim Tarihi"),
                 BaslangicTarihi = GetUnicoDateValue(row, "Başlama Tarihi"),
                 BitisTarihi = GetUnicoDateValue(row, "Bitiş Tarihi"),
+                ZeyilOnayTarihi = null,  // Unico'da yok
+                ZeyilBaslangicTarihi = null,  // Unico'da yok
 
-                // Prim ve komisyon
+                // Primler
                 BrutPrim = GetDecimalValue(row, "Brüt Prim"),
                 NetPrim = GetDecimalValue(row, "Net Prim"),
                 Komisyon = GetUnicoDecimalValue(row, "Komisyon Tutarı"),
-                Vergi = GetDecimalValue(row, "GV"),
 
-                // Sigortalı bilgileri
-                SigortaliAdi = fullName,
-                TcVkn = null, // Unico'da TC/VKN yok
-                Plaka = null, // Unico'da plaka yok
+                // Müşteri Bilgileri - Unico'da Ad ve Soyad AYRI
+                SigortaliAdi = GetStringValue(row, "Sigortalı Adı")?.Trim(),
+                SigortaliSoyadi = GetStringValue(row, "Sigortalı Soyadı")?.Trim(),
 
-                // Poliçe tipi
-                PoliceTipi = GetPoliceTipi(row),
+                // Araç Bilgileri
+                Plaka = null,  // Unico'da yok
 
-                // Ürün adı - Tarife Adı kolonundan
-                UrunAdi = GetStringValue(row, "Tarife Adı"),
-
-                // Acente bilgisi
-                AcenteAdi = GetStringValue(row, "Acente Adı"),
-                Sube = GetStringValue(row, "Bölge Adı"),
-                PoliceKesenPersonel = GetStringValue(row, "Onaylayan Kullanıcı")
+                // Acente Bilgileri
+                AcenteNo = GetStringValue(row, "Acente No")
             };
 
             // Tanzim tarihi yoksa başlangıç tarihini kullan
@@ -84,7 +93,6 @@ public class UnicoExcelParser : BaseExcelParser
                 dto = dto with { TanzimTarihi = dto.BaslangicTarihi };
             }
 
-            // Validation
             var errors = ValidateRow(dto);
             dto = dto with
             {
@@ -114,8 +122,6 @@ public class UnicoExcelParser : BaseExcelParser
                 if (string.IsNullOrEmpty(strValue))
                     continue;
 
-                // Unico formatı: "12/04/2025 00:00:00" (MM/DD/YYYY HH:mm:ss)
-                // veya "12/04/2025" (MM/DD/YYYY)
                 var formats = new[]
                 {
                     "MM/dd/yyyy HH:mm:ss",
@@ -143,7 +149,7 @@ public class UnicoExcelParser : BaseExcelParser
     }
 
     /// <summary>
-    /// Unico komisyon değerini parse eder (string olarak gelebilir)
+    /// Unico komisyon değerini parse eder
     /// </summary>
     private decimal? GetUnicoDecimalValue(IDictionary<string, object?> row, params string[] possibleKeys)
     {
@@ -162,7 +168,6 @@ public class UnicoExcelParser : BaseExcelParser
                 if (string.IsNullOrEmpty(strValue))
                     continue;
 
-                // Türkçe veya İngilizce format
                 strValue = strValue.Replace(",", ".");
 
                 if (decimal.TryParse(strValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var result))
@@ -173,9 +178,8 @@ public class UnicoExcelParser : BaseExcelParser
         return null;
     }
 
-    private string GetPoliceTipi(IDictionary<string, object?> row)
+    private string GetPoliceTipiFromPrim(IDictionary<string, object?> row)
     {
-        // Brüt prim negatifse iptal
         var brutPrim = GetDecimalValue(row, "Brüt Prim");
         if (brutPrim < 0)
             return "İPTAL";
@@ -200,8 +204,6 @@ public class UnicoExcelParser : BaseExcelParser
 
         if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
             errors.Add("Brüt Prim boş veya sıfır");
-
-        // Unico'da TC/VKN ve Plaka zorunlu değil
 
         return errors;
     }
