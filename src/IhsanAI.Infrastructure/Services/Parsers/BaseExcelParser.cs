@@ -10,6 +10,12 @@ public abstract class BaseExcelParser : IExcelParser
     public abstract string SirketAdi { get; }
     public abstract string[] FileNamePatterns { get; }
 
+    /// <summary>
+    /// Header satır numarası (1-indexed). Null ise otomatik tespit edilir.
+    /// Alt sınıflar bunu override edebilir.
+    /// </summary>
+    public virtual int? HeaderRowIndex => null;
+
     protected abstract string[] RequiredColumns { get; }
 
     public virtual bool CanParse(string fileName, IEnumerable<string> headerColumns)

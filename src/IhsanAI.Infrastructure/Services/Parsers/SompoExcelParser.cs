@@ -32,17 +32,19 @@ public class SompoExcelParser : BaseExcelParser
     public override string SirketAdi => "Sompo Sigorta";
     public override string[] FileNamePatterns => new[] { "sompo", "smp" };
 
+    /// <summary>
+    /// Header satırı auto-detect ile bulunur.
+    /// Sompo formatında genellikle 3. satırda ama bazı varyantlarda 1. satırda olabilir.
+    /// </summary>
+    public override int? HeaderRowIndex => null;
+
+    // İçerik bazlı tespit için genel anahtar kelimeler
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe No", "Brüt Prim", "Onay Tarihi"
+        "Poliçe", "Prim", "Onay"
     };
 
-    public override bool CanParse(string fileName, IEnumerable<string> headerColumns)
-    {
-        var fileNameLower = fileName.ToLowerInvariant();
-        return FileNamePatterns.Any(pattern =>
-            fileNameLower.Contains(pattern.ToLowerInvariant()));
-    }
+    // CanParse metodu BaseExcelParser'dan inherit edilir - hem dosya adı hem kolon kontrolü yapar
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
     {
@@ -53,7 +55,8 @@ public class SompoExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            var policeNo = GetStringValue(row, "Poliçe No");
+            // Büyük/küçük harf alternatifleri destekleniyor
+            var policeNo = GetStringValue(row, "Poliçe No", "POLİÇE NO", "POLICE NO", "Police No");
 
             // Boş veya header satırlarını atla
             if (string.IsNullOrWhiteSpace(policeNo))
@@ -63,7 +66,17 @@ public class SompoExcelParser : BaseExcelParser
                 policeNo.ToUpperInvariant().Contains("POLICE"))
                 continue;
 
-            var onayTarihi = GetDateValue(row, "Onay Tarihi");
+            // Tarihler - farklı format varyantlarını destekle
+            var tanzimTarihi = GetDateValue(row, "Onay Tarihi", "ONAY TARİHİ", "ONAY TARIHI",
+                "ONAY TANZİM TARİHİ", "ONAY TANZIM TARIHI", "Tanzim Tarihi");
+            var baslangicTarihi = GetDateValue(row, "BAŞLAMA TAR.", "BAŞLAMA TAR", "BASLAMA TAR",
+                "Başlangıç Tarihi", "BAŞLANGIÇ TARİHİ");
+            var bitisTarihi = GetDateValue(row, "BİTİŞ TAR.", "BİTİŞ TAR", "BITIS TAR",
+                "Bitiş Tarihi", "BİTİŞ TARİHİ");
+
+            // Başlangıç tarihi yoksa tanzim tarihini kullan
+            if (!baslangicTarihi.HasValue && tanzimTarihi.HasValue)
+                baslangicTarihi = tanzimTarihi;
 
             var dto = new ExcelImportRowDto
             {
@@ -71,33 +84,33 @@ public class SompoExcelParser : BaseExcelParser
 
                 // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
-                YenilemeNo = GetStringValue(row, "Yenileme No"),
-                ZeyilNo = GetStringValue(row, "Zeyl No"),
-                ZeyilTipKodu = null,  // SOMPO'da yok
+                YenilemeNo = GetStringValue(row, "Yenileme No", "YENİLEME NO", "YENILEME NO"),
+                ZeyilNo = GetStringValue(row, "Zeyl No", "ZEYL NO", "ZEYİL NO"),
+                ZeyilTipKodu = null,
                 Brans = GetBransFromUrunNo(row),
                 PoliceTipi = GetPoliceTipiFromPrim(row),
 
                 // Tarihler
-                TanzimTarihi = onayTarihi,
-                BaslangicTarihi = onayTarihi,
-                BitisTarihi = null,  // SOMPO'da yok
-                ZeyilOnayTarihi = null,  // SOMPO'da yok
-                ZeyilBaslangicTarihi = null,  // SOMPO'da yok
+                TanzimTarihi = tanzimTarihi,
+                BaslangicTarihi = baslangicTarihi,
+                BitisTarihi = bitisTarihi,
+                ZeyilOnayTarihi = null,
+                ZeyilBaslangicTarihi = null,
 
                 // Primler
-                BrutPrim = GetDecimalValue(row, "Brüt Prim"),
-                NetPrim = GetDecimalValue(row, "Net Prim"),
-                Komisyon = GetDecimalValue(row, "Komisyon"),
+                BrutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "BRUT PRIM"),
+                NetPrim = GetDecimalValue(row, "Net Prim", "NET PRİM", "NET PRIM"),
+                Komisyon = GetDecimalValue(row, "Komisyon", "KOMİSYON", "KOMISYON"),
 
                 // Müşteri Bilgileri
-                SigortaliAdi = GetStringValue(row, "Sigortalı Ünvanı")?.Trim(),
-                SigortaliSoyadi = null,  // SOMPO'da yok
+                SigortaliAdi = GetStringValue(row, "Sigortalı Ünvanı", "SİGORTALI ÜNVANI", "SIGORTALI UNVANI")?.Trim(),
+                SigortaliSoyadi = null,
 
                 // Araç Bilgileri
-                Plaka = null,  // SOMPO'da yok
+                Plaka = GetStringValue(row, "Plaka", "PLAKA"),
 
                 // Acente Bilgileri
-                AcenteNo = null  // SOMPO'da yok
+                AcenteNo = GetStringValue(row, "Acente No", "ACENTE NO", "Acente Kod")
             };
 
             var errors = ValidateRow(dto);
@@ -115,7 +128,7 @@ public class SompoExcelParser : BaseExcelParser
 
     private string? GetBransFromUrunNo(IDictionary<string, object?> row)
     {
-        var urunNo = GetStringValue(row, "Ürün No");
+        var urunNo = GetStringValue(row, "Ürün No", "ÜRÜN NO", "URUN NO");
 
         return urunNo switch
         {
@@ -130,7 +143,7 @@ public class SompoExcelParser : BaseExcelParser
 
     private string GetPoliceTipiFromPrim(IDictionary<string, object?> row)
     {
-        var brutPrim = GetDecimalValue(row, "Brüt Prim");
+        var brutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "BRUT PRIM");
         return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
     }
 
@@ -141,11 +154,14 @@ public class SompoExcelParser : BaseExcelParser
         if (string.IsNullOrWhiteSpace(row.PoliceNo))
             errors.Add("Poliçe No boş olamaz");
 
-        if (!row.TanzimTarihi.HasValue)
-            errors.Add("Onay Tarihi geçersiz");
+        if (!row.TanzimTarihi.HasValue && !row.BaslangicTarihi.HasValue)
+            errors.Add("Tarih bilgisi geçersiz");
 
-        if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
-            errors.Add("Brüt Prim boş veya sıfır");
+        if ((!row.BrutPrim.HasValue || row.BrutPrim == 0) &&
+            (!row.NetPrim.HasValue || row.NetPrim == 0))
+        {
+            errors.Add("Prim bilgisi boş veya sıfır");
+        }
 
         return errors;
     }

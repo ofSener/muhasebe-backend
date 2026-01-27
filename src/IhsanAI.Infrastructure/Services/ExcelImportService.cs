@@ -41,7 +41,9 @@ public class ExcelImportService : IExcelImportService
             new QuickExcelParser(),
             new HepiyiExcelParser(),
             new NeovaExcelParser(),
-            new UnicoExcelParser()
+            new UnicoExcelParser(),
+            new HdiExcelParser(),
+            new AkSigortaSkayParser()
         };
 
         // EPPlus lisans ayarı (non-commercial)
@@ -57,25 +59,34 @@ public class ExcelImportService : IExcelImportService
 
         try
         {
-            // Parser seç (dosya adından)
+            // Parser seç
             IExcelParser? parser = null;
 
+            // 1. Explicit sigorta şirketi ID'si verilmişse onu kullan
             if (sigortaSirketiId.HasValue)
             {
                 parser = _parsers.FirstOrDefault(p => p.SigortaSirketiId == sigortaSirketiId.Value);
             }
 
+            // 2. Dosya adından otomatik tespit
             if (parser == null)
             {
-                // Dosya adından otomatik tespit
                 var fileNameLower = fileName.ToLowerInvariant();
                 parser = _parsers.FirstOrDefault(p =>
                     p.FileNamePatterns.Any(pattern => fileNameLower.Contains(pattern.ToLowerInvariant())));
             }
 
+            // 3. İçerik bazlı tespit - header kolonlarına bakarak parser seç
             if (parser == null)
             {
-                // Default: Ankara parser
+                _logger.LogInformation("Dosya adından parser tespit edilemedi, içerik bazlı tespit deneniyor...");
+                parser = await DetectParserFromContentAsync(fileStream, fileName);
+                fileStream.Position = 0; // Stream'i başa sar
+            }
+
+            // 4. Hala bulunamadıysa default parser
+            if (parser == null)
+            {
                 parser = _parsers.First(p => p.SirketAdi.Contains("Ankara"));
                 _logger.LogWarning("Parser otomatik tespit edilemedi, default parser kullanılıyor: {Parser}", parser.SirketAdi);
             }
@@ -83,6 +94,7 @@ public class ExcelImportService : IExcelImportService
             _logger.LogInformation("Parser seçildi: {Parser}", parser.SirketAdi);
 
             // Excel verilerini oku (parser'a özel)
+            fileStream.Position = 0; // Stream'in başında olduğundan emin ol
             var rows = await ReadExcelFileAsync(fileStream, fileName, parser);
 
             if (rows.Count == 0)
@@ -315,17 +327,98 @@ public class ExcelImportService : IExcelImportService
         return null;
     }
 
+    /// <summary>
+    /// İçerik bazlı parser tespiti - header kolonlarına bakarak en uygun parser'ı bulur
+    /// </summary>
+    private async Task<IExcelParser?> DetectParserFromContentAsync(Stream fileStream, string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var headers = new List<string>();
+
+        try
+        {
+            if (extension == ".xlsx")
+            {
+                using var package = new ExcelPackage(fileStream);
+                var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+
+                if (worksheet == null || worksheet.Dimension == null)
+                    return null;
+
+                // Her parser için header satırını dene ve kolonları kontrol et
+                foreach (var parser in _parsers)
+                {
+                    var headerRow = DetectHeaderRow(worksheet, parser);
+                    headers.Clear();
+
+                    for (int col = 1; col <= Math.Min(30, worksheet.Dimension.End.Column); col++)
+                    {
+                        var cellValue = worksheet.Cells[headerRow, col].Value?.ToString()?.Trim();
+                        if (!string.IsNullOrEmpty(cellValue))
+                            headers.Add(cellValue);
+                    }
+
+                    if (headers.Count > 0 && parser.CanParse(fileName, headers))
+                    {
+                        _logger.LogInformation("İçerik bazlı tespit: {Parser} parser'ı seçildi (header row: {Row})",
+                            parser.SirketAdi, headerRow);
+                        return parser;
+                    }
+                }
+            }
+            else if (extension == ".xls")
+            {
+                using var reader = ExcelReaderFactory.CreateReader(fileStream);
+                var result = reader.AsDataSet(new ExcelDataSetConfiguration
+                {
+                    ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
+                });
+
+                if (result.Tables.Count == 0)
+                    return null;
+
+                var table = result.Tables[0];
+
+                // Her parser için header satırını dene
+                foreach (var parser in _parsers)
+                {
+                    var headerRowIdx = DetectHeaderRowFromDataTable(table, parser);
+                    if (headerRowIdx > table.Rows.Count)
+                        continue;
+
+                    headers.Clear();
+                    var headerRow = table.Rows[headerRowIdx - 1];
+
+                    for (int col = 0; col < Math.Min(30, table.Columns.Count); col++)
+                    {
+                        var cellValue = headerRow[col]?.ToString()?.Trim();
+                        if (!string.IsNullOrEmpty(cellValue) && cellValue != "Unnamed")
+                            headers.Add(cellValue);
+                    }
+
+                    if (headers.Count > 0 && parser.CanParse(fileName, headers))
+                    {
+                        _logger.LogInformation("İçerik bazlı tespit (xls): {Parser} parser'ı seçildi (header row: {Row})",
+                            parser.SirketAdi, headerRowIdx);
+                        return parser;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "İçerik bazlı parser tespiti sırasında hata oluştu");
+        }
+
+        return null;
+    }
+
     #region Private Methods
 
     private async Task<List<IDictionary<string, object?>>> ReadExcelFileAsync(Stream fileStream, string fileName, IExcelParser parser)
     {
         var rows = new List<IDictionary<string, object?>>();
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
-
-        // SOMPO formatı için özel işlem: header 3. satırda (EPPlus 1-indexed)
-        // Row 1 = Firma adı, Row 2 = Tarih aralığı, Row 3 = Headers
-        var isSompoFormat = parser.SirketAdi.Contains("Sompo");
-        var headerRowIndex = isSompoFormat ? 3 : 1; // EPPlus 1-indexed
 
         if (extension == ".xlsx")
         {
@@ -335,36 +428,22 @@ public class ExcelImportService : IExcelImportService
             if (worksheet == null || worksheet.Dimension == null)
                 return rows;
 
-            // Header satırını bul
-            var headers = new List<string>();
-            var actualHeaderRow = headerRowIndex;
+            // Header satırını dinamik olarak tespit et
+            var headerRowIndex = DetectHeaderRow(worksheet, parser);
+            _logger.LogInformation("Detected header row: {HeaderRow} for parser: {Parser}", headerRowIndex, parser.SirketAdi);
 
-            // SOMPO formatında gerçek header'ları bul
-            if (isSompoFormat)
+            // Header'ları oku
+            var headers = new List<string>();
+            for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
             {
-                // 3. satırdaki (EPPlus row 3) header'ları al
-                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
-                {
-                    var cellValue = worksheet.Cells[3, col].Value?.ToString()?.Trim();
-                    headers.Add(string.IsNullOrEmpty(cellValue) ? $"Column_{col}" : cellValue);
-                }
-                actualHeaderRow = 3;
-            }
-            else
-            {
-                // Normal format: ilk satır header
-                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
-                {
-                    var header = worksheet.Cells[1, col].Value?.ToString()?.Trim();
-                    headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
-                }
-                actualHeaderRow = 1;
+                var cellValue = worksheet.Cells[headerRowIndex, col].Value?.ToString()?.Trim();
+                headers.Add(string.IsNullOrEmpty(cellValue) ? $"Column_{col}" : cellValue);
             }
 
             _logger.LogInformation("Headers found: {Headers}", string.Join(", ", headers));
 
             // Veri satırlarını oku
-            for (int row = actualHeaderRow + 1; row <= worksheet.Dimension.End.Row; row++)
+            for (int row = headerRowIndex + 1; row <= worksheet.Dimension.End.Row; row++)
             {
                 var rowData = new Dictionary<string, object?>();
                 bool hasData = false;
@@ -380,7 +459,7 @@ public class ExcelImportService : IExcelImportService
                 }
 
                 // Boş satırları veya özet satırlarını atla
-                if (hasData && !IsSkippableRow(rowData, isSompoFormat))
+                if (hasData && !IsSkippableRow(rowData))
                 {
                     rows.Add(rowData);
                 }
@@ -388,6 +467,7 @@ public class ExcelImportService : IExcelImportService
         }
         else if (extension == ".xls")
         {
+            // .xls için önce tüm veriyi oku, sonra header satırını tespit et
             using var reader = ExcelReaderFactory.CreateReader(fileStream);
             var result = reader.AsDataSet(new ExcelDataSetConfiguration
             {
@@ -399,18 +479,24 @@ public class ExcelImportService : IExcelImportService
 
             var table = result.Tables[0];
 
+            // Header satırını dinamik olarak tespit et
+            var headerRowIndex = DetectHeaderRowFromDataTable(table, parser);
+            _logger.LogInformation("Detected header row (xls): {HeaderRow} for parser: {Parser}", headerRowIndex, parser.SirketAdi);
+
             if (table.Rows.Count < headerRowIndex)
                 return rows;
 
-            // Header satırını al
+            // Header satırını al (0-indexed)
             var headers = new List<string>();
-            var headerRow = table.Rows[headerRowIndex - 1]; // 0-indexed
+            var headerRow = table.Rows[headerRowIndex - 1];
 
             for (int col = 0; col < table.Columns.Count; col++)
             {
                 var header = headerRow[col]?.ToString()?.Trim();
                 headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
             }
+
+            _logger.LogInformation("Headers found (xls): {Headers}", string.Join(", ", headers));
 
             // Veri satırlarını oku
             for (int rowIdx = headerRowIndex; rowIdx < table.Rows.Count; rowIdx++)
@@ -428,7 +514,7 @@ public class ExcelImportService : IExcelImportService
                         hasData = true;
                 }
 
-                if (hasData && !IsSkippableRow(rowData, isSompoFormat))
+                if (hasData && !IsSkippableRow(rowData))
                     rows.Add(rowData);
             }
         }
@@ -472,7 +558,7 @@ public class ExcelImportService : IExcelImportService
         return rows;
     }
 
-    private bool IsSkippableRow(IDictionary<string, object?> row, bool isSompoFormat)
+    private bool IsSkippableRow(IDictionary<string, object?> row)
     {
         // Özet satırlarını atla (Tahakkuk, İptal, Net, Brüt Prim gibi)
         var firstValue = row.Values.FirstOrDefault()?.ToString()?.ToUpperInvariant();
@@ -480,16 +566,73 @@ public class ExcelImportService : IExcelImportService
         if (string.IsNullOrEmpty(firstValue))
             return true;
 
-        var skipKeywords = new[] { "TAHAKKUK", "İPTAL", "IPTAL", "NET", "BRÜT", "BRUT", "TOPLAM", "NET PRİM", "BRÜT PRİM" };
+        var skipKeywords = new[] { "TAHAKKUK", "İPTAL", "IPTAL", "NET", "BRÜT", "BRUT", "TOPLAM", "NET PRİM", "BRÜT PRİM", "GENEL TOPLAM" };
 
         if (skipKeywords.Any(k => firstValue.Contains(k)))
             return true;
 
-        // SOMPO formatında tarih aralığı satırını atla
-        if (isSompoFormat && firstValue.Contains("/") && firstValue.Contains("-"))
+        // Tarih aralığı satırını atla (örn: "01/01/2024 - 31/12/2024")
+        if (firstValue.Contains("/") && firstValue.Contains("-"))
             return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Excel worksheet için header satırını tespit eder (EPPlus - 1-indexed)
+    /// </summary>
+    private int DetectHeaderRow(ExcelWorksheet worksheet, IExcelParser parser)
+    {
+        // 1. Parser'dan explicit row varsa kullan
+        if (parser.HeaderRowIndex.HasValue)
+            return parser.HeaderRowIndex.Value;
+
+        // 2. İlk 10 satırda header keyword'lerini ara
+        var headerKeywords = new[] { "POLICE", "POLİÇE", "PRIM", "PRİM", "POLİCE NO", "POLİÇE NO" };
+
+        for (int row = 1; row <= Math.Min(10, worksheet.Dimension.End.Row); row++)
+        {
+            for (int col = 1; col <= Math.Min(15, worksheet.Dimension.End.Column); col++)
+            {
+                var val = worksheet.Cells[row, col].Value?.ToString()?.ToUpperInvariant();
+                if (val != null && headerKeywords.Any(k => val.Contains(k)))
+                {
+                    _logger.LogInformation("Auto-detected header row at {Row} based on keyword match: {Value}", row, val);
+                    return row;
+                }
+            }
+        }
+
+        return 1; // Default: ilk satır
+    }
+
+    /// <summary>
+    /// DataTable için header satırını tespit eder (.xls format - 1-indexed döndürür)
+    /// </summary>
+    private int DetectHeaderRowFromDataTable(System.Data.DataTable table, IExcelParser parser)
+    {
+        // 1. Parser'dan explicit row varsa kullan
+        if (parser.HeaderRowIndex.HasValue)
+            return parser.HeaderRowIndex.Value;
+
+        // 2. İlk 10 satırda header keyword'lerini ara
+        var headerKeywords = new[] { "POLICE", "POLİÇE", "PRIM", "PRİM", "POLİCE NO", "POLİÇE NO" };
+
+        for (int rowIdx = 0; rowIdx < Math.Min(10, table.Rows.Count); rowIdx++)
+        {
+            var dataRow = table.Rows[rowIdx];
+            for (int col = 0; col < Math.Min(15, table.Columns.Count); col++)
+            {
+                var val = dataRow[col]?.ToString()?.ToUpperInvariant();
+                if (val != null && headerKeywords.Any(k => val.Contains(k)))
+                {
+                    _logger.LogInformation("Auto-detected header row (xls) at {Row} based on keyword match: {Value}", rowIdx + 1, val);
+                    return rowIdx + 1; // 1-indexed döndür
+                }
+            }
+        }
+
+        return 1; // Default: ilk satır
     }
 
     private async Task EnrichRowsWithLookupDataAsync(List<ExcelImportRowDto> rows)

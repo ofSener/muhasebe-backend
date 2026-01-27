@@ -20,6 +20,11 @@ public interface IExcelParser
     string[] FileNamePatterns { get; }
 
     /// <summary>
+    /// Header satır numarası (1-indexed). Null ise otomatik tespit edilir.
+    /// </summary>
+    int? HeaderRowIndex { get; }
+
+    /// <summary>
     /// Bu parser'ın dosyayı parse edip edemeyeceğini kontrol eder
     /// </summary>
     bool CanParse(string fileName, IEnumerable<string> headerColumns);
