@@ -25,6 +25,7 @@ public static class EndpointExtensions
         app.MapDriveEndpoints();
         app.MapDashboardEndpoints();
         app.MapExcelImportEndpoints();
+        app.MapBranslarEndpoints();
 
         return app;
     }
