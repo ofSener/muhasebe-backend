@@ -22,9 +22,10 @@ public class CurrentUserService : ICurrentUserService
     public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;
 
     /// <summary>
-    /// GorebilecegiPoliceler = "1" olan kullanıcılar tüm firmaların verilerine erişebilir.
+    /// SuperAdmin kontrolü - şimdilik false, gerekirse özel bir claim eklenebilir.
+    /// GorebilecegiPoliceler = "1" firma yöneticisi demek, SuperAdmin değil.
     /// </summary>
-    public bool IsSuperAdmin => GorebilecegiPoliceler == "1";
+    public bool IsSuperAdmin => false; // TODO: Gerekirse özel bir superAdmin claim'i eklenebilir
 
     private int? GetClaimAsInt(string claimType)
     {
