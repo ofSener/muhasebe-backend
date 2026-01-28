@@ -126,14 +126,14 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
             return new BransDagilimResponse { Dagilim = new List<BransDagilimItem>(), Mode = DashboardMode.Onayli };
         }
 
-        // Branşları Dictionary ile O(1) lookup
+        // Branşları sigortapoliceturleri tablosundan al (PoliceTurleri)
         var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
-        var bransDict = (await _context.Branslar
-            .Where(b => bransIds.Contains(b.Id))
-            .Select(b => new { b.Id, b.Ad })
+        var policeTuruDict = (await _context.PoliceTurleri
+            .Where(pt => bransIds.Contains(pt.Id))
+            .Select(pt => new { pt.Id, pt.Turu })
             .AsNoTracking()
             .ToListAsync(cancellationToken))
-            .ToDictionary(b => b.Id);
+            .ToDictionary(pt => pt.Id);
 
         var toplamPrim = policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
@@ -142,11 +142,11 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
             .GroupBy(p => p.BransId)
             .Select(g =>
             {
-                bransDict.TryGetValue(g.Key, out var brans);
+                policeTuruDict.TryGetValue(g.Key, out var policeTuru);
                 return new BransDagilimItem
                 {
                     BransId = g.Key,
-                    BransAdi = brans?.Ad ?? $"Branş #{g.Key}",
+                    BransAdi = policeTuru?.Turu ?? $"Branş #{g.Key}",
                     PoliceSayisi = g.Count(),
                     ToplamBrutPrim = g.Sum(p => p.BrutPrim),
                     ToplamKomisyon = g.Sum(p => p.Komisyon),

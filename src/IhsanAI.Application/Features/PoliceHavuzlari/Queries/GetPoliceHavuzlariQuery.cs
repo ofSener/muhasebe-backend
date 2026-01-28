@@ -83,10 +83,10 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Branş bilgilerini çek
-        var branslar = await _context.Branslar
+        // Branş bilgilerini sigortapoliceturleri tablosundan çek
+        var branslar = await _context.PoliceTurleri
             .AsNoTracking()
-            .ToDictionaryAsync(b => b.Id, b => b.Ad, cancellationToken);
+            .ToDictionaryAsync(pt => pt.Id, pt => pt.Turu ?? $"Tür #{pt.Id}", cancellationToken);
 
         // Sigorta şirketlerini çek
         var sigortaSirketleri = await _context.SigortaSirketleri
