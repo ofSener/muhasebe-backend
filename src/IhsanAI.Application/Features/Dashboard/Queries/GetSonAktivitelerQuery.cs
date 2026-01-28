@@ -32,7 +32,8 @@ public record GetSonAktivitelerQuery(
     DateTime? StartDate = null,
     DateTime? EndDate = null,
     int Limit = 20,
-    DashboardMode Mode = DashboardMode.Onayli
+    DashboardMode Mode = DashboardMode.Onayli,
+    DashboardFilters? Filters = null
 ) : IRequest<SonAktivitelerResponse>;
 
 // Handler
@@ -56,13 +57,14 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
     {
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
         var limit = Math.Clamp(request.Limit, MinLimit, MaxLimit);
+        var filters = request.Filters ?? new DashboardFilters();
 
         if (request.Mode == DashboardMode.Yakalama)
         {
-            return await GetYakalamaAktiviteler(firmaId, request.StartDate, request.EndDate, limit, cancellationToken);
+            return await GetYakalamaAktiviteler(firmaId, request.StartDate, request.EndDate, limit, filters, cancellationToken);
         }
 
-        return await GetOnayliAktiviteler(firmaId, request.StartDate, request.EndDate, limit, cancellationToken);
+        return await GetOnayliAktiviteler(firmaId, request.StartDate, request.EndDate, limit, filters, cancellationToken);
     }
 
     private async Task<SonAktivitelerResponse> GetOnayliAktiviteler(
@@ -70,6 +72,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         DateTime? startDate,
         DateTime? endDate,
         int limit,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
@@ -86,6 +89,14 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         {
             policeQuery = policeQuery.Where(p => p.EklenmeTarihi <= endDate.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.BransId));
+        if (filters.SubeIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+        if (filters.SirketIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
         var policeler = await policeQuery
             .OrderByDescending(p => p.EklenmeTarihi)
@@ -167,6 +178,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         DateTime? startDate,
         DateTime? endDate,
         int limit,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var yakalamaQuery = _context.YakalananPoliceler.AsQueryable();
@@ -183,6 +195,16 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         {
             yakalamaQuery = yakalamaQuery.Where(y => y.EklenmeTarihi <= endDate.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.BransIds.Contains(y.PoliceTuru));
+        if (filters.SubeIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SubeIds.Contains(y.SubeId));
+        if (filters.SirketIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SirketIds.Contains(y.SigortaSirketi));
+        if (filters.KullaniciIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.KullaniciIds.Contains(y.ProduktorId));
 
         var yakalananlar = await yakalamaQuery
             .OrderByDescending(y => y.EklenmeTarihi)
@@ -214,18 +236,19 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
             .ToListAsync(cancellationToken))
             .ToDictionary(k => k.Id);
 
-        var bransDict = (await _context.Branslar
-            .Where(b => bransIds.Contains(b.Id))
-            .Select(b => new { b.Id, b.Ad })
+        // PoliceTuru için sigortapoliceturleri tablosunu kullan
+        var policeTuruDict = (await _context.PoliceTurleri
+            .Where(pt => bransIds.Contains(pt.Id))
+            .Select(pt => new { pt.Id, pt.Turu })
             .AsNoTracking()
             .ToListAsync(cancellationToken))
-            .ToDictionary(b => b.Id);
+            .ToDictionary(pt => pt.Id);
 
         var aktiviteler = yakalananlar.Select(y =>
         {
             sirketDict.TryGetValue(y.SigortaSirketi, out var sirket);
             kullaniciDict.TryGetValue(y.UyeId, out var kullanici);
-            bransDict.TryGetValue(y.PoliceTuru, out var brans);
+            policeTuruDict.TryGetValue(y.PoliceTuru, out var policeTuru);
 
             return new SonAktiviteItem
             {
@@ -235,7 +258,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
                 MusteriAdi = y.SigortaliAdi ?? "Bilinmiyor",
                 SigortaSirketi = sirket?.Ad ?? $"Şirket #{y.SigortaSirketi}",
                 SigortaSirketiKodu = sirket?.Kod ?? "",
-                BransAdi = brans?.Ad ?? $"Branş #{y.PoliceTuru}",
+                BransAdi = policeTuru?.Turu ?? $"Tür #{y.PoliceTuru}",
                 BrutPrim = (decimal)y.BrutPrim,
                 Komisyon = 0, // Yakalanan poliçelerde komisyon yok
                 EklenmeTarihi = y.EklenmeTarihi,

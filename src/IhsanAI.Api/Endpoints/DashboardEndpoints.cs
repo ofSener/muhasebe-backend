@@ -31,10 +31,15 @@ public static class DashboardEndpoints
             int? firmaId,
             DateTime? startDate,
             DateTime? endDate,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
             DashboardMode? mode,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetBransDagilimQuery(firmaId, startDate, endDate, mode ?? DashboardMode.Onayli));
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetBransDagilimQuery(firmaId, startDate, endDate, mode ?? DashboardMode.Onayli, filters));
             return Results.Ok(result);
         })
         .WithName("GetBransDagilim")
@@ -59,10 +64,15 @@ public static class DashboardEndpoints
             DateTime? startDate,
             DateTime? endDate,
             int? limit,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
             DashboardMode? mode,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetTopPerformersQuery(firmaId, startDate, endDate, limit ?? 10, mode ?? DashboardMode.Onayli));
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetTopPerformersQuery(firmaId, startDate, endDate, limit ?? 10, mode ?? DashboardMode.Onayli, filters));
             return Results.Ok(result);
         })
         .WithName("GetTopPerformers")
@@ -74,10 +84,15 @@ public static class DashboardEndpoints
             DateTime? startDate,
             DateTime? endDate,
             int? limit,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
             DashboardMode? mode,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetSonAktivitelerQuery(firmaId, startDate, endDate, limit ?? 20, mode ?? DashboardMode.Onayli));
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetSonAktivitelerQuery(firmaId, startDate, endDate, limit ?? 20, mode ?? DashboardMode.Onayli, filters));
             return Results.Ok(result);
         })
         .WithName("GetSonAktiviteler")
@@ -89,10 +104,15 @@ public static class DashboardEndpoints
             DateTime? startDate,
             DateTime? endDate,
             int? limit,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
             DashboardMode? mode,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetSirketDagilimQuery(firmaId, startDate, endDate, limit ?? 10, mode ?? DashboardMode.Onayli));
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetSirketDagilimQuery(firmaId, startDate, endDate, limit ?? 10, mode ?? DashboardMode.Onayli, filters));
             return Results.Ok(result);
         })
         .WithName("GetSirketDagilim")
