@@ -11,13 +11,31 @@ public static class PoliceHavuzlariEndpoints
             .WithTags("Policy Pool")
             .RequireAuthorization("CanViewPool");
 
-        group.MapGet("/", async (int? isOrtagiFirmaId, int? limit, IMediator mediator) =>
+        group.MapGet("/", async (
+            int? isOrtagiFirmaId,
+            int? page,
+            int? pageSize,
+            string? search,
+            string? status,
+            int? bransId,
+            int? sigortaSirketiId,
+            IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetPoliceHavuzlariQuery(isOrtagiFirmaId, limit));
+            var query = new GetPoliceHavuzlariQuery
+            {
+                IsOrtagiFirmaId = isOrtagiFirmaId,
+                Page = page ?? 1,
+                PageSize = pageSize ?? 20,
+                Search = search,
+                Status = status,
+                BransId = bransId,
+                SigortaSirketiId = sigortaSirketiId
+            };
+            var result = await mediator.Send(query);
             return Results.Ok(result);
         })
         .WithName("GetPoliceHavuzlari")
-        .WithDescription("Poliçe havuzlarını listeler");
+        .WithDescription("Havuzdaki poliçeleri yakalananlarla karşılaştırarak listeler");
 
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
