@@ -64,6 +64,7 @@ public record YakalananPoliceDto
     public int ProduktorId { get; init; }
     public int ProduktorSubeId { get; init; }
     public int UyeId { get; init; }
+    public string? UyeAdi { get; init; }
     public int SubeId { get; init; }
     public string? SubeAdi { get; init; }
     public int FirmaId { get; init; }
