@@ -1,5 +1,6 @@
 using MediatR;
 using IhsanAI.Application.Features.PoliceHavuzlari.Queries;
+using IhsanAI.Application.Features.PoliceHavuzlari.Commands;
 
 namespace IhsanAI.Api.Endpoints;
 
@@ -44,6 +45,22 @@ public static class PoliceHavuzlariEndpoints
         })
         .WithName("GetPoliceHavuzById")
         .WithDescription("ID'ye göre poliçe havuzu getirir");
+
+        group.MapPost("/{id:int}/approve", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new ApprovePoolPolicyCommand(id));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("ApprovePoolPolicy")
+        .WithDescription("Havuzdaki poliçeyi onaylayıp ana poliçe tablosuna kaydeder");
+
+        group.MapPost("/batch-approve", async (BatchApprovePoolPoliciesCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(result);
+        })
+        .WithName("BatchApprovePoolPolicies")
+        .WithDescription("Birden fazla havuz poliçesini toplu onaylama");
 
         return app;
     }
