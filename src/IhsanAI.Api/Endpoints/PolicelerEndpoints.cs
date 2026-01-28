@@ -52,6 +52,22 @@ public static class PolicelerEndpoints
         .WithName("BatchSendPoliciesToPool")
         .WithDescription("Toplu poliçe havuza gönderme");
 
+        group.MapPost("/{id:int}/approve", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new ApprovePolicyCommand(id));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("ApprovePolicy")
+        .WithDescription("Yakalanan poliçeyi onaylar");
+
+        group.MapPost("/batch-approve", async (BatchApprovePoliciesCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(result);
+        })
+        .WithName("BatchApprovePolicies")
+        .WithDescription("Toplu poliçe onaylama");
+
         return app;
     }
 }

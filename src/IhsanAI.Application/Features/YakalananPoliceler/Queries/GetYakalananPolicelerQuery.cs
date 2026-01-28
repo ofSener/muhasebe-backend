@@ -46,9 +46,11 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             query = query.Where(x => x.TanzimTarihi <= endDate);
         }
 
-        // Sıralama
+        // Sıralama - varsayılan BaslangicTarihi DESC
         query = (request.SortBy?.ToLower(), request.SortDir?.ToLower()) switch
         {
+            ("baslangictarihi", "asc") => query.OrderBy(x => x.BaslangicTarihi),
+            ("baslangictarihi", "desc") => query.OrderByDescending(x => x.BaslangicTarihi),
             ("tanzimtarihi", "asc") => query.OrderBy(x => x.TanzimTarihi),
             ("tanzimtarihi", "desc") => query.OrderByDescending(x => x.TanzimTarihi),
             ("brutprim", "asc") => query.OrderBy(x => x.BrutPrim),
@@ -58,47 +60,69 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             ("policenumara", "asc") => query.OrderBy(x => x.PoliceNumarasi),
             ("policenumara", "desc") => query.OrderByDescending(x => x.PoliceNumarasi),
             ("eklenmeTarihi", "asc") => query.OrderBy(x => x.EklenmeTarihi),
-            _ => query.OrderByDescending(x => x.EklenmeTarihi) // Default
+            ("eklenmeTarihi", "desc") => query.OrderByDescending(x => x.EklenmeTarihi),
+            _ => query.OrderByDescending(x => x.BaslangicTarihi) // Default: BaslangicTarihi DESC
         };
 
-        return await query
-            .Take(request.Limit ?? 500)
-            .GroupJoin(
-                _context.Subeler,
-                p => p.SubeId,
-                s => s.Id,
-                (p, subeler) => new { p, sube = subeler.FirstOrDefault() })
-            .Select(x => new YakalananPoliceDto
-            {
-                Id = x.p.Id,
-                SigortaSirketi = x.p.SigortaSirketi,
-                PoliceTuru = x.p.PoliceTuru,
-                PoliceNumarasi = x.p.PoliceNumarasi,
-                Plaka = x.p.Plaka,
-                TanzimTarihi = x.p.TanzimTarihi,
-                BaslangicTarihi = x.p.BaslangicTarihi,
-                BitisTarihi = x.p.BitisTarihi,
-                BrutPrim = x.p.BrutPrim,
-                NetPrim = x.p.NetPrim,
-                SigortaliAdi = x.p.SigortaliAdi,
-                ProduktorId = x.p.ProduktorId,
-                ProduktorSubeId = x.p.ProduktorSubeId,
-                UyeId = x.p.UyeId,
-                SubeId = x.p.SubeId,
-                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
-                FirmaId = x.p.FirmaId,
-                MusteriId = x.p.MusteriId,
-                CepTelefonu = x.p.CepTelefonu,
-                GuncelleyenUyeId = x.p.GuncelleyenUyeId,
-                DisPolice = x.p.DisPolice,
-                AcenteAdi = x.p.AcenteAdi,
-                AcenteNo = x.p.AcenteNo,
-                EklenmeTarihi = x.p.EklenmeTarihi,
-                GuncellenmeTarihi = x.p.GuncellenmeTarihi,
-                Aciklama = x.p.Aciklama
-            })
+        // Lookup tabloları - IdEski ile de eşleştir (eski sistemle uyumluluk)
+        var sigortaSirketleriList = await _context.SigortaSirketleri
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        // Hem Id hem IdEski ile lookup dictionary oluştur
+        var sigortaSirketleri = new Dictionary<int, string>();
+        foreach (var s in sigortaSirketleriList)
+        {
+            if (!sigortaSirketleri.ContainsKey(s.Id))
+                sigortaSirketleri[s.Id] = s.Ad;
+            if (s.IdEski.HasValue && !sigortaSirketleri.ContainsKey(s.IdEski.Value))
+                sigortaSirketleri[s.IdEski.Value] = s.Ad;
+        }
+
+        var policeTurleri = await _context.PoliceTurleri
+            .AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, p => p.Turu, cancellationToken);
+
+        var subeler = await _context.Subeler
+            .AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.SubeAdi, cancellationToken);
+
+        var items = await query
+            .Take(request.Limit ?? 500)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return items.Select(p => new YakalananPoliceDto
+        {
+            Id = p.Id,
+            SigortaSirketiId = p.SigortaSirketi,
+            SigortaSirketiAdi = sigortaSirketleri.TryGetValue(p.SigortaSirketi, out var sirket) ? sirket : null,
+            PoliceTuruId = p.PoliceTuru,
+            PoliceTuruAdi = policeTurleri.TryGetValue(p.PoliceTuru, out var tur) ? tur : null,
+            PoliceNo = p.PoliceNumarasi,
+            Plaka = p.Plaka,
+            TanzimTarihi = p.TanzimTarihi,
+            BaslangicTarihi = p.BaslangicTarihi,
+            BitisTarihi = p.BitisTarihi,
+            BrutPrim = (decimal)p.BrutPrim,
+            NetPrim = (decimal)p.NetPrim,
+            SigortaliAdi = p.SigortaliAdi,
+            ProduktorId = p.ProduktorId,
+            ProduktorSubeId = p.ProduktorSubeId,
+            UyeId = p.UyeId,
+            SubeId = p.SubeId,
+            SubeAdi = subeler.TryGetValue(p.SubeId, out var sube) ? sube : null,
+            FirmaId = p.FirmaId,
+            MusteriId = p.MusteriId,
+            CepTelefonu = p.CepTelefonu,
+            GuncelleyenUyeId = p.GuncelleyenUyeId,
+            DisPolice = p.DisPolice,
+            AcenteAdi = p.AcenteAdi,
+            AcenteNo = p.AcenteNo,
+            EklenmeTarihi = p.EklenmeTarihi,
+            GuncellenmeTarihi = p.GuncellenmeTarihi,
+            Aciklama = p.Aciklama
+        }).ToList();
     }
 }
 
@@ -119,44 +143,60 @@ public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPo
 
     public async Task<YakalananPoliceDto?> Handle(GetYakalananPoliceByIdQuery request, CancellationToken cancellationToken)
     {
-        return await _context.YakalananPoliceler
+        var policy = await _context.YakalananPoliceler
             .Where(x => x.Id == request.Id)
             .ApplyAuthorizationFilters(_currentUserService)
-            .GroupJoin(
-                _context.Subeler,
-                p => p.SubeId,
-                s => s.Id,
-                (p, subeler) => new { p, sube = subeler.FirstOrDefault() })
-            .Select(x => new YakalananPoliceDto
-            {
-                Id = x.p.Id,
-                SigortaSirketi = x.p.SigortaSirketi,
-                PoliceTuru = x.p.PoliceTuru,
-                PoliceNumarasi = x.p.PoliceNumarasi,
-                Plaka = x.p.Plaka,
-                TanzimTarihi = x.p.TanzimTarihi,
-                BaslangicTarihi = x.p.BaslangicTarihi,
-                BitisTarihi = x.p.BitisTarihi,
-                BrutPrim = x.p.BrutPrim,
-                NetPrim = x.p.NetPrim,
-                SigortaliAdi = x.p.SigortaliAdi,
-                ProduktorId = x.p.ProduktorId,
-                ProduktorSubeId = x.p.ProduktorSubeId,
-                UyeId = x.p.UyeId,
-                SubeId = x.p.SubeId,
-                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
-                FirmaId = x.p.FirmaId,
-                MusteriId = x.p.MusteriId,
-                CepTelefonu = x.p.CepTelefonu,
-                GuncelleyenUyeId = x.p.GuncelleyenUyeId,
-                DisPolice = x.p.DisPolice,
-                AcenteAdi = x.p.AcenteAdi,
-                AcenteNo = x.p.AcenteNo,
-                EklenmeTarihi = x.p.EklenmeTarihi,
-                GuncellenmeTarihi = x.p.GuncellenmeTarihi,
-                Aciklama = x.p.Aciklama
-            })
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
+
+        if (policy == null) return null;
+
+        // Lookup tabloları
+        var sigortaSirketi = await _context.SigortaSirketleri
+            .Where(s => s.Id == policy.SigortaSirketi)
+            .Select(s => s.Ad)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var policeTuru = await _context.PoliceTurleri
+            .Where(p => p.Id == policy.PoliceTuru)
+            .Select(p => p.Turu)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var subeAdi = await _context.Subeler
+            .Where(s => s.Id == policy.SubeId)
+            .Select(s => s.SubeAdi)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new YakalananPoliceDto
+        {
+            Id = policy.Id,
+            SigortaSirketiId = policy.SigortaSirketi,
+            SigortaSirketiAdi = sigortaSirketi,
+            PoliceTuruId = policy.PoliceTuru,
+            PoliceTuruAdi = policeTuru,
+            PoliceNo = policy.PoliceNumarasi,
+            Plaka = policy.Plaka,
+            TanzimTarihi = policy.TanzimTarihi,
+            BaslangicTarihi = policy.BaslangicTarihi,
+            BitisTarihi = policy.BitisTarihi,
+            BrutPrim = (decimal)policy.BrutPrim,
+            NetPrim = (decimal)policy.NetPrim,
+            SigortaliAdi = policy.SigortaliAdi,
+            ProduktorId = policy.ProduktorId,
+            ProduktorSubeId = policy.ProduktorSubeId,
+            UyeId = policy.UyeId,
+            SubeId = policy.SubeId,
+            SubeAdi = subeAdi,
+            FirmaId = policy.FirmaId,
+            MusteriId = policy.MusteriId,
+            CepTelefonu = policy.CepTelefonu,
+            GuncelleyenUyeId = policy.GuncelleyenUyeId,
+            DisPolice = policy.DisPolice,
+            AcenteAdi = policy.AcenteAdi,
+            AcenteNo = policy.AcenteNo,
+            EklenmeTarihi = policy.EklenmeTarihi,
+            GuncellenmeTarihi = policy.GuncellenmeTarihi,
+            Aciklama = policy.Aciklama
+        };
     }
 }
