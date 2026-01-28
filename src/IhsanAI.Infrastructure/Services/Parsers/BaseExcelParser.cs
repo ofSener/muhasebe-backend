@@ -103,22 +103,66 @@ public abstract class BaseExcelParser : IExcelParser
 
     protected static decimal? GetDecimalValue(IDictionary<string, object?> row, params string[] possibleColumns)
     {
-        var strValue = GetStringValue(row, possibleColumns);
-        if (string.IsNullOrEmpty(strValue)) return null;
+        foreach (var col in possibleColumns)
+        {
+            var key = row.Keys.FirstOrDefault(k =>
+                NormalizeColumnName(k).Contains(NormalizeColumnName(col)) ||
+                NormalizeColumnName(col).Contains(NormalizeColumnName(k)));
 
-        // Para birimi sembollerini ve formatları temizle
-        strValue = strValue
-            .Replace("₺", "")
-            .Replace("TL", "")
-            .Replace("TRY", "")
-            .Replace(" ", "")
-            .Replace(".", "")  // Binlik ayırıcı
-            .Replace(",", ".")  // Ondalık ayırıcı
-            .Trim();
+            if (key != null && row.TryGetValue(key, out var value) && value != null)
+            {
+                // Önce numeric türleri kontrol et - Excel'den direkt sayı gelebilir
+                if (value is decimal d)
+                    return d;
+                if (value is double dbl)
+                    return (decimal)dbl;
+                if (value is float f)
+                    return (decimal)f;
+                if (value is int i)
+                    return i;
+                if (value is long l)
+                    return l;
 
-        if (decimal.TryParse(strValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var result))
-            return result;
+                // String ise parse et
+                var strValue = value.ToString()?.Trim();
+                if (string.IsNullOrEmpty(strValue)) continue;
 
+                // Para birimi sembollerini temizle
+                strValue = strValue
+                    .Replace("₺", "")
+                    .Replace("TL", "")
+                    .Replace("TRY", "")
+                    .Replace(" ", "")
+                    .Trim();
+
+                // Türkçe format mı İngilizce format mı anla
+                // Türkçe: 1.549,22 (binlik nokta, ondalık virgül)
+                // İngilizce: 1,549.22 (binlik virgül, ondalık nokta)
+
+                var lastDot = strValue.LastIndexOf('.');
+                var lastComma = strValue.LastIndexOf(',');
+
+                if (lastComma > lastDot)
+                {
+                    // Türkçe format: 1.549,22
+                    strValue = strValue.Replace(".", "").Replace(",", ".");
+                }
+                else if (lastDot > lastComma)
+                {
+                    // İngilizce format: 1,549.22
+                    strValue = strValue.Replace(",", "");
+                }
+                else if (lastComma >= 0 && lastDot < 0)
+                {
+                    // Sadece virgül var: 1549,22
+                    strValue = strValue.Replace(",", ".");
+                }
+                // Sadece nokta var veya hiçbiri yok: olduğu gibi bırak
+
+                if (decimal.TryParse(strValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var result))
+                    return result;
+            }
+        }
         return null;
     }
 

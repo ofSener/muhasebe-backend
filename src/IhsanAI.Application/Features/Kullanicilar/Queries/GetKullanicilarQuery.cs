@@ -28,32 +28,27 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
             aktifQuery = aktifQuery.Where(x => x.FirmaId == request.FirmaId.Value);
         }
 
-        var aktifKullanicilar = await aktifQuery
-            .GroupJoin(
-                _context.Yetkiler,
-                k => k.MuhasebeYetkiId,
-                y => y.Id,
-                (k, yetkiler) => new { k, yetki = yetkiler.FirstOrDefault() })
-            .GroupJoin(
-                _context.Subeler,
-                x => x.k.SubeId,
-                s => s.Id,
-                (x, subeler) => new { x.k, x.yetki, sube = subeler.FirstOrDefault() })
-            .Select(x => new KullaniciListDto
+        var aktifKullanicilar = await (
+            from k in aktifQuery
+            join y in _context.Yetkiler on k.MuhasebeYetkiId equals y.Id into yetkiler
+            from yetki in yetkiler.DefaultIfEmpty()
+            join s in _context.Subeler on k.SubeId equals s.Id into subeler
+            from sube in subeler.DefaultIfEmpty()
+            select new KullaniciListDto
             {
-                Id = x.k.Id,
-                Adi = x.k.Adi,
-                Soyadi = x.k.Soyadi,
-                Email = x.k.Email,
-                GsmNo = x.k.GsmNo,
-                KullaniciTuru = x.k.KullaniciTuru,
-                AnaYoneticimi = x.k.AnaYoneticimi,
-                MuhasebeYetkiId = x.k.MuhasebeYetkiId,
-                YetkiAdi = x.yetki != null ? x.yetki.YetkiAdi : null,
-                SubeId = x.k.SubeId,
-                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
-                Onay = x.k.Onay,
-                KayitTarihi = x.k.KayitTarihi,
+                Id = k.Id,
+                Adi = k.Adi,
+                Soyadi = k.Soyadi,
+                Email = k.Email,
+                GsmNo = k.GsmNo,
+                KullaniciTuru = k.KullaniciTuru,
+                AnaYoneticimi = k.AnaYoneticimi,
+                MuhasebeYetkiId = k.MuhasebeYetkiId,
+                YetkiAdi = yetki != null ? yetki.YetkiAdi : null,
+                SubeId = k.SubeId,
+                SubeAdi = sube != null ? sube.SubeAdi : null,
+                Onay = k.Onay,
+                KayitTarihi = k.KayitTarihi,
                 IsEski = false
             })
             .AsNoTracking()
