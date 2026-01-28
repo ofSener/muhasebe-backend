@@ -6,6 +6,7 @@ public interface ICurrentUserService
     string? UserName { get; }
     int? FirmaId { get; }
     int? SubeId { get; }
+    int? UyeId { get; }
     bool IsCompanyAdmin { get; }
     bool IsAuthenticated { get; }
     string? GorebilecegiPoliceler { get; }

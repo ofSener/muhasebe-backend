@@ -37,8 +37,8 @@ public class GetCustomerStatsQueryHandler : IRequestHandler<GetCustomerStatsQuer
     {
         var query = _context.Musteriler.AsQueryable();
 
-        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele
-        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
+        // GÜVENLİK: Token'dan gelen FirmaId ve SubeId ile filtrele
+        query = query.ApplyMusteriAccessFilter(_currentUserService, x => x.EkleyenFirmaId, x => x.EkleyenSubeId);
 
         var now = _dateTimeService.Now;
         var firstDayOfMonth = new DateTime(now.Year, now.Month, 1);

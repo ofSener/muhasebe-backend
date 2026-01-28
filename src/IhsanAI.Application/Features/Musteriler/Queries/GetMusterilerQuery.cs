@@ -41,8 +41,8 @@ public class GetMusterilerQueryHandler : IRequestHandler<GetMusterilerQuery, Lis
     {
         var query = _context.Musteriler.AsQueryable();
 
-        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele, client'a güvenme!
-        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
+        // GÜVENLİK: Token'dan gelen FirmaId ve SubeId ile filtrele, client'a güvenme!
+        query = query.ApplyMusteriAccessFilter(_currentUserService, x => x.EkleyenFirmaId, x => x.EkleyenSubeId);
 
         // LEFT JOIN with Police table to get policy count and total premium
         var result = await query
@@ -141,8 +141,8 @@ public class GetMusteriByIdQueryHandler : IRequestHandler<GetMusteriByIdQuery, M
     {
         var query = _context.Musteriler.AsQueryable();
 
-        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele
-        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
+        // GÜVENLİK: Token'dan gelen FirmaId ve SubeId ile filtrele
+        query = query.ApplyMusteriAccessFilter(_currentUserService, x => x.EkleyenFirmaId, x => x.EkleyenSubeId);
 
         var musteri = await query
             .AsNoTracking()
@@ -223,8 +223,8 @@ public class SearchCustomersQueryHandler : IRequestHandler<SearchCustomersQuery,
     {
         var query = _context.Musteriler.AsQueryable();
 
-        // GÜVENLİK: Token'dan gelen FirmaId ile filtrele, client'a güvenme!
-        query = query.ApplyFirmaFilterNullable(_currentUserService, x => x.EkleyenFirmaId);
+        // GÜVENLİK: Token'dan gelen FirmaId ve SubeId ile filtrele, client'a güvenme!
+        query = query.ApplyMusteriAccessFilter(_currentUserService, x => x.EkleyenFirmaId, x => x.EkleyenSubeId);
 
         if (!string.IsNullOrWhiteSpace(request.Name))
         {

@@ -17,6 +17,7 @@ public class CurrentUserService : ICurrentUserService
     public string? UserName => _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.Name)?.Value;
     public int? FirmaId => GetClaimAsInt("firmaId");
     public int? SubeId => GetClaimAsInt("subeId");
+    public int? UyeId => int.TryParse(UserId, out var id) ? id : null;
     public bool IsCompanyAdmin => GetClaimAsBool("yetkilerSayfasindaIslemYapabilsin");
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
     public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;

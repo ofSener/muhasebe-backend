@@ -99,4 +99,50 @@ public static class QueryAuthorizationExtensions
 
         return query;
     }
+
+    /// <summary>
+    /// Nullable şube bazlı filtreleme için extension.
+    /// SubeId kontrolü yapar (opsiyonel).
+    /// </summary>
+    public static IQueryable<T> ApplySubeFilterNullable<T>(
+        this IQueryable<T> query,
+        ICurrentUserService currentUser,
+        Expression<Func<T, int?>> subeIdSelector)
+    {
+        if (!currentUser.SubeId.HasValue) return query;
+
+        var userSubeId = currentUser.SubeId.Value;
+        var parameter = subeIdSelector.Parameters[0];
+        var body = Expression.Equal(
+            subeIdSelector.Body,
+            Expression.Convert(Expression.Constant(userSubeId), typeof(int?)));
+        var lambda = Expression.Lambda<Func<T, bool>>(body, parameter);
+
+        return query.Where(lambda);
+    }
+
+    /// <summary>
+    /// Müşteri erişim filtresi uygular.
+    /// GorebilecegiPoliceler değerine göre firma veya şube bazlı filtre uygular.
+    /// "1" = Firma yöneticisi - tüm firmadaki müşteriler
+    /// "2" = Şube çalışanı - sadece şubedeki müşteriler
+    /// </summary>
+    public static IQueryable<T> ApplyMusteriAccessFilter<T>(
+        this IQueryable<T> query,
+        ICurrentUserService currentUser,
+        Expression<Func<T, int?>> firmaIdSelector,
+        Expression<Func<T, int?>> subeIdSelector)
+    {
+        // Firma filtresi her zaman uygulanır
+        query = query.ApplyFirmaFilterNullable(currentUser, firmaIdSelector);
+
+        // gorebilecegiPoliceler = "2" ise sadece şube müşterilerini gör
+        if (currentUser.GorebilecegiPoliceler == "2" && currentUser.SubeId.HasValue)
+        {
+            query = query.ApplySubeFilterNullable(currentUser, subeIdSelector);
+        }
+        // gorebilecegiPoliceler = "1" ise firma müşterilerini gör (zaten uygulandı)
+
+        return query;
+    }
 }

@@ -39,10 +39,14 @@ public record CreateCustomerResultDto
 public class CreateCustomerCommandHandler : IRequestHandler<CreateCustomerCommand, CreateCustomerResultDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CreateCustomerCommandHandler(IApplicationDbContext context)
+    public CreateCustomerCommandHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<CreateCustomerResultDto> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
@@ -68,9 +72,10 @@ public class CreateCustomerCommandHandler : IRequestHandler<CreateCustomerComman
             YasadigiIlce = request.YasadigiIlce,
             Boy = request.Boy,
             Kilo = request.Kilo,
-            EkleyenFirmaId = request.EkleyenFirmaId,
-            EkleyenUyeId = request.EkleyenUyeId,
-            EkleyenSubeId = request.EkleyenSubeId,
+            // GÜVENLİK: Token'dan otomatik al, client'a güvenme!
+            EkleyenFirmaId = _currentUserService.FirmaId,
+            EkleyenUyeId = _currentUserService.UyeId,
+            EkleyenSubeId = _currentUserService.SubeId,
             EklenmeZamani = DateTime.UtcNow
         };
 
