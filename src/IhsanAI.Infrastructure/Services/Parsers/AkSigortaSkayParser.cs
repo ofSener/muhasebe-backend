@@ -42,7 +42,13 @@ public class AkSigortaSkayParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "POLICE NO", "NET PRIM", "TANZ"
+        "POLICE NO", "PRIM", "TANZ"
+    };
+
+    // SKAY'a özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "ZEYL", "BAS/YUK", "SIGORTALI"  // Bu kombinasyon sadece SKAY'da var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)

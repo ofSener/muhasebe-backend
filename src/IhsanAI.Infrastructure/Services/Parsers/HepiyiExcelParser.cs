@@ -35,7 +35,13 @@ public class HepiyiExcelParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe No", "Brüt Prim", "Poliçe Tarih"
+        "Poliçe No", "Prim", "Tarih"
+    };
+
+    // Hepiyi'ye özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "Müşteri Ad", "Poliçe Tarih", "Police Tür Kod"  // Bu kombinasyon sadece Hepiyi'de var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)

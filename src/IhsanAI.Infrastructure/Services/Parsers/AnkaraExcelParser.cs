@@ -33,7 +33,13 @@ public class AnkaraExcelParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe No", "Brüt Prim", "Poliçe Başlangıç"
+        "Poliçe No", "Brüt Prim", "Başlangıç"
+    };
+
+    // Ankara'ya özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "Tahakkuk / İptal", "Branş"  // Bu kombinasyon sadece Ankara'da var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)

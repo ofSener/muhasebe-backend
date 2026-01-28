@@ -41,7 +41,14 @@ public class SompoExcelParser : BaseExcelParser
     // İçerik bazlı tespit için genel anahtar kelimeler
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe", "Prim", "Onay"
+        "Poliçe", "Prim"
+    };
+
+    // Sompo'ya özgü kolonlar - içerik bazlı tespit için
+    // Not: Bu kombinasyon sadece Sompo formatında var
+    protected override string[] SignatureColumns => new[]
+    {
+        "ÜRÜN NO", "ONAY TANZİM"
     };
 
     // CanParse metodu BaseExcelParser'dan inherit edilir - hem dosya adı hem kolon kontrolü yapar
@@ -56,7 +63,7 @@ public class SompoExcelParser : BaseExcelParser
             rowNumber++;
 
             // Büyük/küçük harf alternatifleri destekleniyor
-            var policeNo = GetStringValue(row, "Poliçe No", "POLİÇE NO", "POLICE NO", "Police No");
+            var policeNo = GetStringValue(row, "POLİÇE NO", "Poliçe No", "POLICE NO", "Police No");
 
             // Boş veya header satırlarını atla
             if (string.IsNullOrWhiteSpace(policeNo))
@@ -67,12 +74,12 @@ public class SompoExcelParser : BaseExcelParser
                 continue;
 
             // Tarihler - farklı format varyantlarını destekle
-            var tanzimTarihi = GetDateValue(row, "Onay Tarihi", "ONAY TARİHİ", "ONAY TARIHI",
-                "ONAY TANZİM TARİHİ", "ONAY TANZIM TARIHI", "Tanzim Tarihi");
+            var tanzimTarihi = GetDateValue(row, "ONAY TANZİM TARİHİ", "Onay Tarihi", "ONAY TARİHİ",
+                "ONAY TARIHI", "ONAY TANZIM TARIHI", "Tanzim Tarihi");
             var baslangicTarihi = GetDateValue(row, "BAŞLAMA TAR.", "BAŞLAMA TAR", "BASLAMA TAR",
-                "Başlangıç Tarihi", "BAŞLANGIÇ TARİHİ");
+                "Başlangıç Tarihi", "BAŞLANGIÇ TARİHİ", "BASLANGIC TARIHI");
             var bitisTarihi = GetDateValue(row, "BİTİŞ TAR.", "BİTİŞ TAR", "BITIS TAR",
-                "Bitiş Tarihi", "BİTİŞ TARİHİ");
+                "Bitiş Tarihi", "BİTİŞ TARİHİ", "BITIS TARIHI");
 
             // Başlangıç tarihi yoksa tanzim tarihini kullan
             if (!baslangicTarihi.HasValue && tanzimTarihi.HasValue)
@@ -84,8 +91,8 @@ public class SompoExcelParser : BaseExcelParser
 
                 // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
-                YenilemeNo = GetStringValue(row, "Yenileme No", "YENİLEME NO", "YENILEME NO"),
-                ZeyilNo = GetStringValue(row, "Zeyl No", "ZEYL NO", "ZEYİL NO"),
+                YenilemeNo = GetStringValue(row, "YENİLEME NO", "Yenileme No", "YENILEME NO"),
+                ZeyilNo = GetStringValue(row, "ZEYİL NO", "Zeyl No", "ZEYL NO", "ZEYIL NO"),
                 ZeyilTipKodu = null,
                 Brans = GetBransFromUrunNo(row),
                 PoliceTipi = GetPoliceTipiFromPrim(row),
@@ -98,19 +105,19 @@ public class SompoExcelParser : BaseExcelParser
                 ZeyilBaslangicTarihi = null,
 
                 // Primler
-                BrutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "BRUT PRIM"),
-                NetPrim = GetDecimalValue(row, "Net Prim", "NET PRİM", "NET PRIM"),
-                Komisyon = GetDecimalValue(row, "Komisyon", "KOMİSYON", "KOMISYON"),
+                BrutPrim = GetDecimalValue(row, "BRÜT PRİM", "Brüt Prim", "BRUT PRIM"),
+                NetPrim = GetDecimalValue(row, "NET PRİM", "Net Prim", "NET PRIM"),
+                Komisyon = GetDecimalValue(row, "KOMİSYON", "Komisyon", "KOMISYON"),
 
                 // Müşteri Bilgileri
-                SigortaliAdi = GetStringValue(row, "Sigortalı Ünvanı", "SİGORTALI ÜNVANI", "SIGORTALI UNVANI")?.Trim(),
+                SigortaliAdi = GetStringValue(row, "SİGORTALI ÜNVANI", "Sigortalı Ünvanı", "SIGORTALI UNVANI")?.Trim(),
                 SigortaliSoyadi = null,
 
                 // Araç Bilgileri
-                Plaka = GetStringValue(row, "Plaka", "PLAKA"),
+                Plaka = GetStringValue(row, "PLAKA", "Plaka"),
 
                 // Acente Bilgileri
-                AcenteNo = GetStringValue(row, "Acente No", "ACENTE NO", "Acente Kod")
+                AcenteNo = GetStringValue(row, "ACENTE NO", "Acente No", "ACENTE KOD", "ACENTE ÜNVAN")
             };
 
             var errors = ValidateRow(dto);
@@ -128,22 +135,33 @@ public class SompoExcelParser : BaseExcelParser
 
     private string? GetBransFromUrunNo(IDictionary<string, object?> row)
     {
-        var urunNo = GetStringValue(row, "Ürün No", "ÜRÜN NO", "URUN NO");
+        var urunNo = GetStringValue(row, "ÜRÜN NO", "Ürün No", "URUN NO");
 
-        return urunNo switch
+        // Sompo ürün kodları ve TKP gibi kısaltmalar
+        return urunNo?.ToUpperInvariant() switch
         {
             "117" => "DASK",
             "115" => "KASKO",
             "101" => "TRAFİK",
             "118" => "KONUT",
             "119" => "İŞYERİ",
+            "TKP" => "KASKO",  // TKP = Ticari Kasko Paketi
+            "TRF" => "TRAFİK",
             _ => urunNo  // Kod olarak döndür
         };
     }
 
     private string GetPoliceTipiFromPrim(IDictionary<string, object?> row)
     {
-        var brutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "BRUT PRIM");
+        // Önce İPTAL / YÜRÜRLÜK kolonuna bak
+        var iptalYururluk = GetStringValue(row, "?PTAL / YÜRÜRLÜK", "İPTAL / YÜRÜRLÜK", "IPTAL / YURURLUK");
+        if (!string.IsNullOrEmpty(iptalYururluk) &&
+            iptalYururluk.ToUpperInvariant().Contains("İPTAL"))
+        {
+            return "İPTAL";
+        }
+
+        var brutPrim = GetDecimalValue(row, "BRÜT PRİM", "Brüt Prim", "BRUT PRIM");
         return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
     }
 

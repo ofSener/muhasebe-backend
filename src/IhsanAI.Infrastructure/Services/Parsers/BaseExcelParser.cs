@@ -18,21 +18,46 @@ public abstract class BaseExcelParser : IExcelParser
 
     protected abstract string[] RequiredColumns { get; }
 
+    /// <summary>
+    /// Bu parser'ı diğerlerinden ayıran benzersiz kolon isimleri.
+    /// İçerik bazlı tespit için kullanılır. Null ise sadece RequiredColumns kullanılır.
+    /// </summary>
+    protected virtual string[]? SignatureColumns => null;
+
     public virtual bool CanParse(string fileName, IEnumerable<string> headerColumns)
     {
-        // Dosya adı kontrolü
+        var headers = headerColumns.Select(h => NormalizeColumnName(h)).ToList();
+
+        // 1. Dosya adı kontrolü - eşleşirse direkt true
         var fileNameLower = fileName.ToLowerInvariant();
         var fileNameMatch = FileNamePatterns.Any(pattern =>
             fileNameLower.Contains(pattern.ToLowerInvariant()));
 
-        if (!fileNameMatch) return false;
+        if (fileNameMatch)
+        {
+            // Dosya adı eşleşti, kolonları da kontrol et
+            var requiredNormalized = RequiredColumns.Select(c => NormalizeColumnName(c)).ToList();
+            return requiredNormalized.All(req =>
+                headers.Any(h => h.Contains(req) || req.Contains(h)));
+        }
 
-        // Header kolonları kontrolü
-        var headers = headerColumns.Select(h => NormalizeColumnName(h)).ToList();
-        var requiredNormalized = RequiredColumns.Select(c => NormalizeColumnName(c)).ToList();
+        // 2. İçerik bazlı tespit - SignatureColumns varsa kullan
+        if (SignatureColumns != null && SignatureColumns.Length > 0)
+        {
+            var signatureNormalized = SignatureColumns.Select(c => NormalizeColumnName(c)).ToList();
+            var allSignaturesFound = signatureNormalized.All(sig =>
+                headers.Any(h => h.Contains(sig) || sig.Contains(h)));
 
-        return requiredNormalized.All(req =>
-            headers.Any(h => h.Contains(req) || req.Contains(h)));
+            if (allSignaturesFound)
+            {
+                // Signature eşleşti, required kolonları da kontrol et
+                var requiredNormalized = RequiredColumns.Select(c => NormalizeColumnName(c)).ToList();
+                return requiredNormalized.All(req =>
+                    headers.Any(h => h.Contains(req) || req.Contains(h)));
+            }
+        }
+
+        return false;
     }
 
     public abstract List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows);

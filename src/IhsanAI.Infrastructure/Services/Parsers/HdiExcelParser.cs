@@ -37,7 +37,13 @@ public class HdiExcelParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe No", "Brüt Prim", "Vade Başlangıç"
+        "Poliçe No", "Prim", "Vade"
+    };
+
+    // HDI'ya özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "Vade Başlangıç", "İpt/Kay", "Tecdit No"  // Bu kombinasyon sadece HDI'da var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)

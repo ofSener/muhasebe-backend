@@ -35,7 +35,13 @@ public class UnicoExcelParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "Poliçe No", "Brüt Prim", "Başlama Tarihi"
+        "Poliçe No", "Prim", "Tarih"
+    };
+
+    // Unico'ya özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "Tarife Adı", "Sigortalı Adı", "Sigortalı Soyadı"  // Bu kombinasyon sadece Unico'da var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)

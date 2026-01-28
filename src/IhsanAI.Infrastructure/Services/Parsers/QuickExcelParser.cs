@@ -38,6 +38,12 @@ public class QuickExcelParser : BaseExcelParser
         "Police", "Prim", "Tarih"  // Genel anahtar kelimeler
     };
 
+    // Quick'e özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "POLICE_HAREKET_NO", "EKBELGE_NO"  // Bu kombinasyon sadece Quick Police_Listesi'nde var
+    };
+
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
     {
         var result = new List<ExcelImportRowDto>();

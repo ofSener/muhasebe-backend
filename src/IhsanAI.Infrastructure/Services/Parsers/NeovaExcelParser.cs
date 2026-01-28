@@ -34,7 +34,13 @@ public class NeovaExcelParser : BaseExcelParser
 
     protected override string[] RequiredColumns => new[]
     {
-        "POLİÇE NO", "BRÜT PRİM", "BAŞLANGIÇ"
+        "POLİÇE NO", "PRİM", "TARİH"
+    };
+
+    // Neova'ya özgü kolonlar - içerik bazlı tespit için
+    protected override string[] SignatureColumns => new[]
+    {
+        "KOD", "G/T", "MÜŞTERİ AD/ÜNVAN"  // Bu kombinasyon sadece Neova'da var
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
@@ -110,12 +116,17 @@ public class NeovaExcelParser : BaseExcelParser
         var kod = GetStringValue(row, "KOD");
         var faaliyetKodu = GetStringValue(row, "FAALİYET KODU");
 
-        // Önce KOD'a bak
+        // Önce KOD'a bak - Neova branş kodları
         var brans = kod?.ToUpperInvariant() switch
         {
             "TR4" => "TRAFİK",
+            "TS2" => "KASKO",  // Ticari kasko
             "K23" => "KASKO",
             "DSK" => "DASK",
+            "KNT" => "KONUT",
+            var x when x?.StartsWith("TR") == true => "TRAFİK",
+            var x when x?.StartsWith("TS") == true => "KASKO",
+            var x when x?.StartsWith("K") == true => "KASKO",
             _ => null
         };
 
