@@ -8,24 +8,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Tarih formatı: "12/04/2025 00:00:00" (MM/DD/YYYY)
 ///
 /// MAPPING:
-/// - PoliceNo       <- "Poliçe No"             ✅
-/// - YenilemeNo     <- "Yenileme No"           ✅
-/// - ZeyilNo        <- "Zeyl No"               ✅
-/// - ZeyilTipKodu   <- YOK                     ❌
-/// - Brans          <- "Tarife Adı"            ✅
-/// - PoliceTipi     <- YOK                     ❌
-/// - TanzimTarihi   <- "Tanzim Tarihi"         ✅
-/// - BaslangicTarihi<- "Başlama Tarihi"        ✅
-/// - BitisTarihi    <- "Bitiş Tarihi"          ✅
-/// - ZeyilOnayTarihi<- YOK                     ❌
-/// - ZeyilBaslangicTarihi <- YOK               ❌
-/// - BrutPrim       <- "Brüt Prim"             ✅
-/// - NetPrim        <- "Net Prim"              ✅
-/// - Komisyon       <- "Komisyon Tutarı"       ✅
-/// - SigortaliAdi   <- "Sigortalı Adı"         ✅
-/// - SigortaliSoyadi<- "Sigortalı Soyadı"      ✅
-/// - Plaka          <- YOK                     ❌
-/// - AcenteNo       <- "Acente No"             ✅
+/// *PoliceNo       = "Poliçe No"             [OK]
+/// *YenilemeNo     = "Yenileme No"           [OK]
+/// *ZeyilNo        = "Zeyl No"               [OK]
+/// *ZeyilTipKodu   = YOK                     [NO]
+/// *Brans          = "Tarife Adı"            [OK]
+/// *PoliceTipi     = YOK                     [NO]
+/// *TanzimTarihi   = "Tanzim Tarihi"         [OK]
+/// *BaslangicTarihi= "Başlama Tarihi"        [OK]
+/// *BitisTarihi    = "Bitiş Tarihi"          [OK]
+/// *ZeyilOnayTarihi= YOK                     [NO]
+/// *ZeyilBaslangicTarihi = YOK               [NO]
+/// *BrutPrim       = "Brüt Prim"             [OK]
+/// *NetPrim        = "Net Prim"              [OK]
+/// *Komisyon       = "Komisyon Tutarı"       [OK]
+/// *SigortaliAdi   = "Sigortalı Adı"         [OK]
+/// *SigortaliSoyadi= "Sigortalı Soyadı"      [OK]
+/// *Plaka          = YOK                     [NO]
+/// *AcenteNo       = "Acente No"             [OK]
 /// </summary>
 public class UnicoExcelParser : BaseExcelParser
 {

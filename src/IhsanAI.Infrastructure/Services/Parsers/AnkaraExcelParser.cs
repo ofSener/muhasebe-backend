@@ -6,24 +6,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Ankara Sigorta Excel parser
 ///
 /// MAPPING:
-/// - PoliceNo       <- "Poliçe No"                   ✅
-/// - YenilemeNo     <- "Yenileme No"                 ✅
-/// - ZeyilNo        <- "Zeyil No"                    ✅
-/// - ZeyilTipKodu   <- "Zeyil Türü"                  ✅
-/// - Brans          <- "Branş"                       ✅
-/// - PoliceTipi     <- "Tahakkuk / İptal"            ✅
-/// - TanzimTarihi   <- "Poliçe Onay Tarihi"          ✅
-/// - BaslangicTarihi<- "Poliçe Başlangıç Tarihi"     ✅
-/// - BitisTarihi    <- "Poliçe Bitiş Tarihi"         ✅
-/// - ZeyilOnayTarihi<- "Zeyil Onay Tarihi"           ✅
-/// - ZeyilBaslangicTarihi <- "Zeyil Başlangıç Tarihi"✅
-/// - BrutPrim       <- "Brüt Prim ₺"                 ✅
-/// - NetPrim        <- "Net Prim ₺"                  ✅
-/// - Komisyon       <- "Komisyon ₺"                  ✅
-/// - SigortaliAdi   <- "Sigortalı Adı / Ünvanı"      ✅
-/// - SigortaliSoyadi<- YOK (birleşik)                ❌
-/// - Plaka          <- "Plaka"                       ✅
-/// - AcenteNo       <- "Partaj"                      ⚠️
+/// *PoliceNo       = "Poliçe No"                   [OK]
+/// *YenilemeNo     = "Yenileme No"                 [OK]
+/// *ZeyilNo        = "Zeyil No"                    [OK]
+/// *ZeyilTipKodu   = "Zeyil Türü"                  [OK]
+/// *Brans          = "Branş"                       [OK]
+/// *PoliceTipi     = "Tahakkuk / İptal"            [OK]
+/// *TanzimTarihi   = "Poliçe Onay Tarihi"          [OK]
+/// *BaslangicTarihi= "Poliçe Başlangıç Tarihi"     [OK]
+/// *BitisTarihi    = "Poliçe Bitiş Tarihi"         [OK]
+/// *ZeyilOnayTarihi= "Zeyil Onay Tarihi"           [OK]
+/// *ZeyilBaslangicTarihi = "Zeyil Başlangıç Tarihi"[OK]
+/// *BrutPrim       = "Brüt Prim ₺"                 [OK]
+/// *NetPrim        = "Net Prim ₺"                  [OK]
+/// *Komisyon       = "Komisyon ₺"                  [OK]
+/// *SigortaliAdi   = "Sigortalı Adı / Ünvanı"      [OK]
+/// *SigortaliSoyadi= YOK (birleşik)                [NO]
+/// *Plaka          = "Plaka"                       [OK]
+/// *AcenteNo       = "Partaj"                      [WARN]
 /// </summary>
 public class AnkaraExcelParser : BaseExcelParser
 {

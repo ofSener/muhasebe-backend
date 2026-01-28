@@ -7,24 +7,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Kolonlar büyük harf
 ///
 /// MAPPING:
-/// - PoliceNo       <- "POLİÇE NO"                ✅
-/// - YenilemeNo     <- YOK                        ❌
-/// - ZeyilNo        <- "ZEYİL NO"                 ✅
-/// - ZeyilTipKodu   <- "ZEYİL TÜRÜ"               ✅
-/// - Brans          <- "FAALİYET KODU"            ⚠️
-/// - PoliceTipi     <- "G/T"                      ⚠️
-/// - TanzimTarihi   <- "TANZİM TARİHİ"            ✅
-/// - BaslangicTarihi<- "BAŞLANGIÇ TARİHİ"         ✅
-/// - BitisTarihi    <- "BİTİŞ TARİHİ"             ✅
-/// - ZeyilOnayTarihi<- YOK                        ❌
-/// - ZeyilBaslangicTarihi <- YOK                  ❌
-/// - BrutPrim       <- "BRÜT PRİM"                ✅
-/// - NetPrim        <- "NET PRİM"                 ✅
-/// - Komisyon       <- "KOMİSYON"                 ✅
-/// - SigortaliAdi   <- "MÜŞTERİ AD/ÜNVAN"         ✅
-/// - SigortaliSoyadi<- YOK (birleşik)             ❌
-/// - Plaka          <- YOK                        ❌
-/// - AcenteNo       <- "ACENTE KOD"               ✅
+/// *PoliceNo       = "POLİÇE NO"                [OK]
+/// *YenilemeNo     = YOK                        [NO]
+/// *ZeyilNo        = "ZEYİL NO"                 [OK]
+/// *ZeyilTipKodu   = "ZEYİL TÜRÜ"               [OK]
+/// *Brans          = "FAALİYET KODU"            [WARN]
+/// *PoliceTipi     = "G/T"                      [WARN]
+/// *TanzimTarihi   = "TANZİM TARİHİ"            [OK]
+/// *BaslangicTarihi= "BAŞLANGIÇ TARİHİ"         [OK]
+/// *BitisTarihi    = "BİTİŞ TARİHİ"             [OK]
+/// *ZeyilOnayTarihi= YOK                        [NO]
+/// *ZeyilBaslangicTarihi = YOK                  [NO]
+/// *BrutPrim       = "BRÜT PRİM"                [OK]
+/// *NetPrim        = "NET PRİM"                 [OK]
+/// *Komisyon       = "KOMİSYON"                 [OK]
+/// *SigortaliAdi   = "MÜŞTERİ AD/ÜNVAN"         [OK]
+/// *SigortaliSoyadi= YOK (birleşik)             [NO]
+/// *Plaka          = YOK                        [NO]
+/// *AcenteNo       = "ACENTE KOD"               [OK]
 /// </summary>
 public class NeovaExcelParser : BaseExcelParser
 {

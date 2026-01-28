@@ -8,24 +8,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Header 8. satırda (1-indexed)
 ///
 /// MAPPING:
-/// - PoliceNo       <- "POLICE NO"             ✅
-/// - YenilemeNo     <- YOK                     ❌
-/// - ZeyilNo        <- "ZEYL"                  ✅
-/// - ZeyilTipKodu   <- YOK                     ❌
-/// - Brans          <- "TRF" (Tarife kodu)     ⚠️
-/// - PoliceTipi     <- "TAH\nTIP"              ⚠️
-/// - TanzimTarihi   <- "TANZ.\nT"              ✅
-/// - BaslangicTarihi<- "BAS/YUK\nT"            ✅
-/// - BitisTarihi    <- "BITIS\nT"              ✅
-/// - ZeyilOnayTarihi<- YOK                     ❌
-/// - ZeyilBaslangicTarihi <- YOK               ❌
-/// - BrutPrim       <- "TOPLAM"                ✅
-/// - NetPrim        <- "NET PRIM"              ✅
-/// - Komisyon       <- "KOM TUTARI"            ✅
-/// - SigortaliAdi   <- "SIGORTALI"             ✅
-/// - SigortaliSoyadi<- YOK                     ❌
-/// - Plaka          <- YOK                     ❌
-/// - AcenteNo       <- YOK (dosyada mevcut)    ❌
+/// *PoliceNo       = "POLICE NO"             [OK]
+/// *YenilemeNo     = YOK                     [NO]
+/// *ZeyilNo        = "ZEYL"                  [OK]
+/// *ZeyilTipKodu   = YOK                     [NO]
+/// *Brans          = "TRF" (Tarife kodu)     [WARN]
+/// *PoliceTipi     = "TAH TIP"               [WARN]
+/// *TanzimTarihi   = "TANZ. T"               [OK]
+/// *BaslangicTarihi= "BAS/YUK T"             [OK]
+/// *BitisTarihi    = "BITIS T"               [OK]
+/// *ZeyilOnayTarihi= YOK                     [NO]
+/// *ZeyilBaslangicTarihi = YOK               [NO]
+/// *BrutPrim       = "TOPLAM"                [OK]
+/// *NetPrim        = "NET PRIM"              [OK]
+/// *Komisyon       = "KOM TUTARI"            [OK]
+/// *SigortaliAdi   = "SIGORTALI"             [OK]
+/// *SigortaliSoyadi= YOK                     [NO]
+/// *Plaka          = YOK                     [NO]
+/// *AcenteNo       = YOK (dosyada mevcut)    [NO]
 /// </summary>
 public class AkSigortaSkayParser : BaseExcelParser
 {

@@ -7,24 +7,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Header 3. satırda (EPPlus 1-indexed)
 ///
 /// MAPPING:
-/// - PoliceNo       <- "Poliçe No"        ✅
-/// - YenilemeNo     <- "Yenileme No"      ✅
-/// - ZeyilNo        <- "Zeyl No"          ✅
-/// - ZeyilTipKodu   <- YOK                ❌
-/// - Brans          <- "Ürün No" (kod)    ⚠️
-/// - PoliceTipi     <- YOK                ❌
-/// - TanzimTarihi   <- "Onay Tarihi"      ✅
-/// - BaslangicTarihi<- "Onay Tarihi"      ⚠️ (aynı)
-/// - BitisTarihi    <- YOK                ❌
-/// - ZeyilOnayTarihi<- YOK                ❌
-/// - ZeyilBaslangicTarihi <- YOK          ❌
-/// - BrutPrim       <- "Brüt Prim"        ✅
-/// - NetPrim        <- "Net Prim"         ✅
-/// - Komisyon       <- "Komisyon"         ✅
-/// - SigortaliAdi   <- "Sigortalı Ünvanı" ✅
-/// - SigortaliSoyadi<- YOK                ❌
-/// - Plaka          <- YOK                ❌
-/// - AcenteNo       <- YOK                ❌
+/// *PoliceNo       = "Poliçe No"        [OK]
+/// *YenilemeNo     = "Yenileme No"      [OK]
+/// *ZeyilNo        = "Zeyl No"          [OK]
+/// *ZeyilTipKodu   = YOK                [NO]
+/// *Brans          = "Ürün No" (kod)    [WARN]
+/// *PoliceTipi     = YOK                [NO]
+/// *TanzimTarihi   = "Onay Tarihi"      [OK]
+/// *BaslangicTarihi= "Onay Tarihi"      [WARN] (aynı)
+/// *BitisTarihi    = YOK                [NO]
+/// *ZeyilOnayTarihi= YOK                [NO]
+/// *ZeyilBaslangicTarihi = YOK          [NO]
+/// *BrutPrim       = "Brüt Prim"        [OK]
+/// *NetPrim        = "Net Prim"         [OK]
+/// *Komisyon       = "Komisyon"         [OK]
+/// *SigortaliAdi   = "Sigortalı Ünvanı" [OK]
+/// *SigortaliSoyadi= YOK                [NO]
+/// *Plaka          = YOK                [NO]
+/// *AcenteNo       = YOK                [NO]
 /// </summary>
 public class SompoExcelParser : BaseExcelParser
 {
