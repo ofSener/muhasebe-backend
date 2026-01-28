@@ -49,15 +49,17 @@ public record KullaniciListDto
 public record YakalananPoliceDto
 {
     public int Id { get; init; }
-    public int SigortaSirketi { get; init; }
-    public int PoliceTuru { get; init; }
-    public string PoliceNumarasi { get; init; } = string.Empty;
+    public int SigortaSirketiId { get; init; }
+    public string? SigortaSirketiAdi { get; init; }
+    public int PoliceTuruId { get; init; }
+    public string? PoliceTuruAdi { get; init; }
+    public string PoliceNo { get; init; } = string.Empty;
     public string Plaka { get; init; } = string.Empty;
     public DateTime TanzimTarihi { get; init; }
     public DateTime BaslangicTarihi { get; init; }
     public DateTime BitisTarihi { get; init; }
-    public float BrutPrim { get; init; }
-    public float NetPrim { get; init; }
+    public decimal BrutPrim { get; init; }
+    public decimal NetPrim { get; init; }
     public string? SigortaliAdi { get; init; }
     public int ProduktorId { get; init; }
     public int ProduktorSubeId { get; init; }
