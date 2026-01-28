@@ -61,7 +61,7 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             ("policenumara", "desc") => query.OrderByDescending(x => x.PoliceNumarasi),
             ("eklenmeTarihi", "asc") => query.OrderBy(x => x.EklenmeTarihi),
             ("eklenmeTarihi", "desc") => query.OrderByDescending(x => x.EklenmeTarihi),
-            _ => query.OrderByDescending(x => x.BaslangicTarihi) // Default: BaslangicTarihi DESC
+            _ => query.OrderByDescending(x => x.TanzimTarihi) // Default: TanzimTarihi DESC
         };
 
         // Lookup tabloları - IdEski ile de eşleştir (eski sistemle uyumluluk)
@@ -87,6 +87,11 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             .AsNoTracking()
             .ToDictionaryAsync(s => s.Id, s => s.SubeAdi, cancellationToken);
 
+        // Kullanıcılar - Ad Soyad için
+        var kullanicilar = await _context.Kullanicilar
+            .AsNoTracking()
+            .ToDictionaryAsync(u => u.Id, u => $"{u.Adi} {u.Soyadi}".Trim(), cancellationToken);
+
         var items = await query
             .Take(request.Limit ?? 500)
             .AsNoTracking()
@@ -110,6 +115,7 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             ProduktorId = p.ProduktorId,
             ProduktorSubeId = p.ProduktorSubeId,
             UyeId = p.UyeId,
+            UyeAdi = kullanicilar.TryGetValue(p.UyeId, out var kullanici) ? kullanici : null,
             SubeId = p.SubeId,
             SubeAdi = subeler.TryGetValue(p.SubeId, out var sube) ? sube : null,
             FirmaId = p.FirmaId,
@@ -167,6 +173,11 @@ public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPo
             .Select(s => s.SubeAdi)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var uyeAdi = await _context.Kullanicilar
+            .Where(u => u.Id == policy.UyeId)
+            .Select(u => $"{u.Adi} {u.Soyadi}".Trim())
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new YakalananPoliceDto
         {
             Id = policy.Id,
@@ -185,6 +196,7 @@ public class GetYakalananPoliceByIdQueryHandler : IRequestHandler<GetYakalananPo
             ProduktorId = policy.ProduktorId,
             ProduktorSubeId = policy.ProduktorSubeId,
             UyeId = policy.UyeId,
+            UyeAdi = uyeAdi,
             SubeId = policy.SubeId,
             SubeAdi = subeAdi,
             FirmaId = policy.FirmaId,
