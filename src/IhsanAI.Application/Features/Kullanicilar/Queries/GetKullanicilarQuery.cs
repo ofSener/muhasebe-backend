@@ -64,27 +64,25 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
             eskiQuery = eskiQuery.Where(x => x.FirmaId == request.FirmaId.Value);
         }
 
-        var eskiKullanicilar = await eskiQuery
-            .GroupJoin(
-                _context.Subeler,
-                k => k.SubeId,
-                s => s.Id,
-                (k, subeler) => new { k, sube = subeler.FirstOrDefault() })
-            .Select(x => new KullaniciListDto
+        var eskiKullanicilar = await (
+            from k in eskiQuery
+            join s in _context.Subeler on k.SubeId equals s.Id into subeler
+            from sube in subeler.DefaultIfEmpty()
+            select new KullaniciListDto
             {
-                Id = x.k.Id,
-                Adi = x.k.Adi,
-                Soyadi = x.k.Soyadi,
-                Email = x.k.Email,
-                GsmNo = x.k.GsmNo,
-                KullaniciTuru = x.k.KullaniciTuru,
-                AnaYoneticimi = x.k.AnaYoneticimi,
+                Id = k.Id,
+                Adi = k.Adi,
+                Soyadi = k.Soyadi,
+                Email = k.Email,
+                GsmNo = k.GsmNo,
+                KullaniciTuru = k.KullaniciTuru,
+                AnaYoneticimi = k.AnaYoneticimi,
                 MuhasebeYetkiId = null,
                 YetkiAdi = null,
-                SubeId = x.k.SubeId,
-                SubeAdi = x.sube != null ? x.sube.SubeAdi : null,
+                SubeId = k.SubeId,
+                SubeAdi = sube != null ? sube.SubeAdi : null,
                 Onay = 0, // Eski kullanıcılar her zaman Pasif
-                KayitTarihi = x.k.KayitTarihi,
+                KayitTarihi = k.KayitTarihi,
                 IsEski = true
             })
             .AsNoTracking()
