@@ -30,7 +30,8 @@ public record GetTopPerformersQuery(
     DateTime? StartDate = null,
     DateTime? EndDate = null,
     int Limit = 10,
-    DashboardMode Mode = DashboardMode.Onayli
+    DashboardMode Mode = DashboardMode.Onayli,
+    DashboardFilters? Filters = null
 ) : IRequest<TopPerformersResponse>;
 
 // Handler
@@ -57,13 +58,14 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         var startDate = request.StartDate ?? new DateTime(now.Year, now.Month, 1);
         var endDate = request.EndDate ?? now;
         var limit = Math.Min(Math.Max(request.Limit, 1), 50);
+        var filters = request.Filters ?? new DashboardFilters();
 
         if (request.Mode == DashboardMode.Yakalama)
         {
-            return await GetYakalamaPerformers(firmaId, startDate, endDate, limit, cancellationToken);
+            return await GetYakalamaPerformers(firmaId, startDate, endDate, limit, filters, cancellationToken);
         }
 
-        return await GetOnayliPerformers(firmaId, startDate, endDate, limit, cancellationToken);
+        return await GetOnayliPerformers(firmaId, startDate, endDate, limit, filters, cancellationToken);
     }
 
     private async Task<TopPerformersResponse> GetOnayliPerformers(
@@ -71,6 +73,7 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         DateTime startDate,
         DateTime endDate,
         int limit,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
@@ -78,6 +81,14 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         {
             policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.BransId));
+        if (filters.SubeIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+        if (filters.SirketIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
         var policeler = await policeQuery
             .Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate)
@@ -142,6 +153,7 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         DateTime startDate,
         DateTime endDate,
         int limit,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var yakalamaQuery = _context.YakalananPoliceler.AsQueryable();
@@ -149,6 +161,16 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         {
             yakalamaQuery = yakalamaQuery.Where(y => y.FirmaId == firmaId.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.BransIds.Contains(y.PoliceTuru));
+        if (filters.SubeIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SubeIds.Contains(y.SubeId));
+        if (filters.SirketIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SirketIds.Contains(y.SigortaSirketi));
+        if (filters.KullaniciIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.KullaniciIds.Contains(y.ProduktorId));
 
         var yakalananlar = await yakalamaQuery
             .Where(y => y.TanzimTarihi >= startDate && y.TanzimTarihi <= endDate)
