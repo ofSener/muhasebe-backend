@@ -7,24 +7,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Sheet: PoliceListesi
 ///
 /// MAPPING:
-/// - PoliceNo       <- "PoliceNo"             ✅
-/// - YenilemeNo     <- "YenilemeNo"           ✅
-/// - ZeyilNo        <- "ZeyilNo"              ✅
-/// - ZeyilTipKodu   <- "ZeyilTipKodu"         ✅
-/// - Brans          <- "UrunAd"               ✅
-/// - PoliceTipi     <- YOK                    ❌
-/// - TanzimTarihi   <- "TanzimTarihi"         ✅
-/// - BaslangicTarihi<- "BaslamaTarihi"        ✅
-/// - BitisTarihi    <- "BitisTarihi"          ✅
-/// - ZeyilOnayTarihi<- YOK                    ❌
-/// - ZeyilBaslangicTarihi <- YOK              ❌
-/// - BrutPrim       <- "BrutPrimTL"           ✅
-/// - NetPrim        <- "NetPrimTL"            ✅
-/// - Komisyon       <- "AcenteKomisyonTL"     ✅
-/// - SigortaliAdi   <- YOK                    ❌
-/// - SigortaliSoyadi<- YOK                    ❌
-/// - Plaka          <- YOK                    ❌
-/// - AcenteNo       <- "AcenteNo"             ✅
+/// *PoliceNo       = "PoliceNo"             [OK]
+/// *YenilemeNo     = "YenilemeNo"           [OK]
+/// *ZeyilNo        = "ZeyilNo"              [OK]
+/// *ZeyilTipKodu   = "ZeyilTipKodu"         [OK]
+/// *Brans          = "UrunAd"               [OK]
+/// *PoliceTipi     = YOK                    [NO]
+/// *TanzimTarihi   = "TanzimTarihi"         [OK]
+/// *BaslangicTarihi= "BaslamaTarihi"        [OK]
+/// *BitisTarihi    = "BitisTarihi"          [OK]
+/// *ZeyilOnayTarihi= YOK                    [NO]
+/// *ZeyilBaslangicTarihi = YOK              [NO]
+/// *BrutPrim       = "BrutPrimTL"           [OK]
+/// *NetPrim        = "NetPrimTL"            [OK]
+/// *Komisyon       = "AcenteKomisyonTL"     [OK]
+/// *SigortaliAdi   = YOK                    [NO]
+/// *SigortaliSoyadi= YOK                    [NO]
+/// *Plaka          = YOK                    [NO]
+/// *AcenteNo       = "AcenteNo"             [OK]
 /// </summary>
 public class QuickExcelParser : BaseExcelParser
 {

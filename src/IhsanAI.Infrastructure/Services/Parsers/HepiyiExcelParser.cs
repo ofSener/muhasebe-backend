@@ -8,24 +8,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Primler Türkçe format ("-7.141,35")
 ///
 /// MAPPING:
-/// - PoliceNo       <- "Poliçe No"                ✅
-/// - YenilemeNo     <- "YENILEME_NO"              ✅
-/// - ZeyilNo        <- "Zeyl No"                  ✅
-/// - ZeyilTipKodu   <- "ZEYL_TIP_KODU"            ✅
-/// - Brans          <- "URUN_ADI"                 ✅
-/// - PoliceTipi     <- "ZEYIL_TIPI"               ✅
-/// - TanzimTarihi   <- "Tanzim Tarih"             ✅
-/// - BaslangicTarihi<- "Poliçe Tarih"             ✅
-/// - BitisTarihi    <- "Poliçe Bitiş Tarih"       ✅
-/// - ZeyilOnayTarihi<- YOK                        ❌
-/// - ZeyilBaslangicTarihi <- YOK                  ❌
-/// - BrutPrim       <- "Brüt Prim"                ✅
-/// - NetPrim        <- "Net Prim"                 ✅
-/// - Komisyon       <- "Komisyon"                 ✅
-/// - SigortaliAdi   <- "Müşteri Ad – Soyad"       ✅
-/// - SigortaliSoyadi<- YOK (birleşik)             ❌
-/// - Plaka          <- "Plaka"                    ✅
-/// - AcenteNo       <- "PARTAJ"                   ⚠️
+/// *PoliceNo       = "Poliçe No"                [OK]
+/// *YenilemeNo     = "YENILEME_NO"              [OK]
+/// *ZeyilNo        = "Zeyl No"                  [OK]
+/// *ZeyilTipKodu   = "ZEYL_TIP_KODU"            [OK]
+/// *Brans          = "URUN_ADI"                 [OK]
+/// *PoliceTipi     = "ZEYIL_TIPI"               [OK]
+/// *TanzimTarihi   = "Tanzim Tarih"             [OK]
+/// *BaslangicTarihi= "Poliçe Tarih"             [OK]
+/// *BitisTarihi    = "Poliçe Bitiş Tarih"       [OK]
+/// *ZeyilOnayTarihi= YOK                        [NO]
+/// *ZeyilBaslangicTarihi = YOK                  [NO]
+/// *BrutPrim       = "Brüt Prim"                [OK]
+/// *NetPrim        = "Net Prim"                 [OK]
+/// *Komisyon       = "Komisyon"                 [OK]
+/// *SigortaliAdi   = "Müşteri Ad – Soyad"       [OK]
+/// *SigortaliSoyadi= YOK (birleşik)             [NO]
+/// *Plaka          = "Plaka"                    [OK]
+/// *AcenteNo       = "PARTAJ"                   [WARN]
 /// </summary>
 public class HepiyiExcelParser : BaseExcelParser
 {

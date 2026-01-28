@@ -7,24 +7,24 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Dosya formatı: raporSonuc_sid_*.xlsx
 ///
 /// MAPPING:
-/// - PoliceNo       <- "Poliçe No"            ✅
-/// - YenilemeNo     <- "Tecdit No"            ✅
-/// - ZeyilNo        <- "Zeyil No"             ✅
-/// - ZeyilTipKodu   <- "Zeyil Kod"            ✅
-/// - Brans          <- "Branş"                ✅
-/// - PoliceTipi     <- "İpt/Kay"              ✅
-/// - TanzimTarihi   <- "Tanzim Tarihi"        ✅
-/// - BaslangicTarihi<- "Vade Başlangıç"       ✅
-/// - BitisTarihi    <- "Vade Bitiş"           ✅
-/// - ZeyilOnayTarihi<- YOK                    ❌
-/// - ZeyilBaslangicTarihi <- YOK              ❌
-/// - BrutPrim       <- "Brüt Prim"            ✅
-/// - NetPrim        <- "Net Prim"             ✅
-/// - Komisyon       <- "Komisyon"             ✅
-/// - SigortaliAdi   <- "Sigortalı Adı"        ✅
-/// - SigortaliSoyadi<- "Sigortalı Soyadı"     ✅
-/// - Plaka          <- YOK                    ❌
-/// - AcenteNo       <- "Acente"               ✅
+/// *PoliceNo       = "Poliçe No"            [OK]
+/// *YenilemeNo     = "Tecdit No"            [OK]
+/// *ZeyilNo        = "Zeyil No"             [OK]
+/// *ZeyilTipKodu   = "Zeyil Kod"            [OK]
+/// *Brans          = "Branş"                [OK]
+/// *PoliceTipi     = "İpt/Kay"              [OK]
+/// *TanzimTarihi   = "Tanzim Tarihi"        [OK]
+/// *BaslangicTarihi= "Vade Başlangıç"       [OK]
+/// *BitisTarihi    = "Vade Bitiş"           [OK]
+/// *ZeyilOnayTarihi= YOK                    [NO]
+/// *ZeyilBaslangicTarihi = YOK              [NO]
+/// *BrutPrim       = "Brüt Prim"            [OK]
+/// *NetPrim        = "Net Prim"             [OK]
+/// *Komisyon       = "Komisyon"             [OK]
+/// *SigortaliAdi   = "Sigortalı Adı"        [OK]
+/// *SigortaliSoyadi= "Sigortalı Soyadı"     [OK]
+/// *Plaka          = YOK                    [NO]
+/// *AcenteNo       = "Acente"               [OK]
 /// </summary>
 public class HdiExcelParser : BaseExcelParser
 {
