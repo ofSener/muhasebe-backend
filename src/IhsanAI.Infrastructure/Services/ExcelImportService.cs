@@ -109,8 +109,24 @@ public class ExcelImportService : IExcelImportService
                 };
             }
 
-            // Parse et
-            var parsedRows = parser.Parse(rows);
+            // Ek sayfaları oku (varsa)
+            var additionalSheets = new Dictionary<string, List<IDictionary<string, object?>>>();
+            if (parser.AdditionalSheetNames != null && parser.AdditionalSheetNames.Length > 0)
+            {
+                fileStream.Position = 0;
+                additionalSheets = await ReadAdditionalSheetsAsync(fileStream, fileName, parser);
+            }
+
+            // Parse et - ek sayfa varsa onu kullan
+            List<ExcelImportRowDto> parsedRows;
+            if (additionalSheets.Count > 0)
+            {
+                parsedRows = parser.ParseWithAdditionalSheets(rows, additionalSheets);
+            }
+            else
+            {
+                parsedRows = parser.Parse(rows);
+            }
 
             // Müşteri ve branş eşleştirmelerini yap
             await EnrichRowsWithLookupDataAsync(parsedRows);
@@ -138,7 +154,7 @@ public class ExcelImportService : IExcelImportService
                 TotalRows = parsedRows.Count,
                 ValidRows = parsedRows.Count(r => r.IsValid),
                 InvalidRows = parsedRows.Count(r => !r.IsValid),
-                Rows = parsedRows.Take(100).ToList(), // İlk 100 satırı önizleme olarak döndür
+                Rows = parsedRows, // Tüm satırları döndür, frontend sayfalama yapacak
                 ImportSessionId = sessionId,
                 FileName = fileName,
                 SigortaSirketiId = cacheEntry.SigortaSirketiId,
@@ -183,7 +199,7 @@ public class ExcelImportService : IExcelImportService
                     .FirstOrDefaultAsync(p =>
                         p.PoliceNo == row.PoliceNo &&
                         p.SigortaSirketiId == session.SigortaSirketiId &&
-                        p.ZeyilNo == GetZeyilNoAsSbyte(row.ZeyilNo));
+                        p.ZeyilNo == GetZeyilNoAsInt(row.ZeyilNo));
 
                 if (existingPolice != null)
                 {
@@ -220,7 +236,7 @@ public class ExcelImportService : IExcelImportService
                     PoliceTipi = row.PoliceTipi ?? "TAHAKKUK",
                     PoliceNo = row.PoliceNo ?? string.Empty,
                     Plaka = row.Plaka ?? string.Empty,
-                    ZeyilNo = GetZeyilNoAsSbyte(row.ZeyilNo),
+                    ZeyilNo = GetZeyilNoAsInt(row.ZeyilNo),
                     YenilemeNo = GetYenilemeNoAsSbyte(row.YenilemeNo),
                     SigortaSirketiId = session.SigortaSirketiId,
                     TanzimTarihi = row.TanzimTarihi ?? row.BaslangicTarihi ?? _dateTimeService.Now,
@@ -415,6 +431,123 @@ public class ExcelImportService : IExcelImportService
 
     #region Private Methods
 
+    private async Task<Dictionary<string, List<IDictionary<string, object?>>>> ReadAdditionalSheetsAsync(
+        Stream fileStream, string fileName, IExcelParser parser)
+    {
+        var result = new Dictionary<string, List<IDictionary<string, object?>>>();
+
+        if (parser.AdditionalSheetNames == null || parser.AdditionalSheetNames.Length == 0)
+            return result;
+
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+        if (extension == ".xlsx")
+        {
+            using var package = new ExcelPackage(fileStream);
+
+            foreach (var sheetName in parser.AdditionalSheetNames)
+            {
+                var worksheet = package.Workbook.Worksheets.FirstOrDefault(w =>
+                    w.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+
+                if (worksheet == null || worksheet.Dimension == null)
+                {
+                    _logger.LogWarning("Ek sayfa bulunamadı: {SheetName}", sheetName);
+                    continue;
+                }
+
+                var rows = new List<IDictionary<string, object?>>();
+
+                // Header'ları oku (ilk satır)
+                var headers = new List<string>();
+                for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
+                {
+                    var cellValue = worksheet.Cells[1, col].Value?.ToString()?.Trim();
+                    headers.Add(string.IsNullOrEmpty(cellValue) ? $"Column_{col}" : cellValue);
+                }
+
+                // Veri satırlarını oku
+                for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+                {
+                    var rowData = new Dictionary<string, object?>();
+                    bool hasData = false;
+
+                    for (int col = 1; col <= headers.Count; col++)
+                    {
+                        var cellValue = worksheet.Cells[row, col].Value;
+                        var headerName = headers[col - 1];
+                        rowData[headerName] = cellValue;
+
+                        if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue.ToString()))
+                            hasData = true;
+                    }
+
+                    if (hasData)
+                        rows.Add(rowData);
+                }
+
+                result[sheetName] = rows;
+                _logger.LogInformation("Ek sayfa okundu: {SheetName}, {RowCount} satır", sheetName, rows.Count);
+            }
+        }
+        else if (extension == ".xls")
+        {
+            using var reader = ExcelReaderFactory.CreateReader(fileStream);
+            var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
+            {
+                ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
+            });
+
+            foreach (var sheetName in parser.AdditionalSheetNames)
+            {
+                var table = dataSet.Tables.Cast<System.Data.DataTable>()
+                    .FirstOrDefault(t => t.TableName.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+
+                if (table == null || table.Rows.Count < 2)
+                {
+                    _logger.LogWarning("Ek sayfa bulunamadı (xls): {SheetName}", sheetName);
+                    continue;
+                }
+
+                var rows = new List<IDictionary<string, object?>>();
+
+                // Header'ları oku (ilk satır)
+                var headers = new List<string>();
+                var headerRow = table.Rows[0];
+                for (int col = 0; col < table.Columns.Count; col++)
+                {
+                    var header = headerRow[col]?.ToString()?.Trim();
+                    headers.Add(string.IsNullOrEmpty(header) ? $"Column_{col}" : header);
+                }
+
+                // Veri satırlarını oku
+                for (int rowIdx = 1; rowIdx < table.Rows.Count; rowIdx++)
+                {
+                    var dataRow = table.Rows[rowIdx];
+                    var rowData = new Dictionary<string, object?>();
+                    bool hasData = false;
+
+                    for (int col = 0; col < headers.Count; col++)
+                    {
+                        var cellValue = dataRow[col];
+                        if (cellValue == DBNull.Value) cellValue = null;
+                        rowData[headers[col]] = cellValue;
+                        if (cellValue != null && !string.IsNullOrWhiteSpace(cellValue.ToString()))
+                            hasData = true;
+                    }
+
+                    if (hasData)
+                        rows.Add(rowData);
+                }
+
+                result[sheetName] = rows;
+                _logger.LogInformation("Ek sayfa okundu (xls): {SheetName}, {RowCount} satır", sheetName, rows.Count);
+            }
+        }
+
+        return result;
+    }
+
     private async Task<List<IDictionary<string, object?>>> ReadExcelFileAsync(Stream fileStream, string fileName, IExcelParser parser)
     {
         var rows = new List<IDictionary<string, object?>>();
@@ -423,7 +556,23 @@ public class ExcelImportService : IExcelImportService
         if (extension == ".xlsx")
         {
             using var package = new ExcelPackage(fileStream);
-            var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+
+            // Parser'da MainSheetName varsa onu kullan, yoksa ilk sayfayı al
+            ExcelWorksheet? worksheet;
+            if (!string.IsNullOrEmpty(parser.MainSheetName))
+            {
+                worksheet = package.Workbook.Worksheets.FirstOrDefault(w =>
+                    w.Name.Equals(parser.MainSheetName, StringComparison.OrdinalIgnoreCase));
+                if (worksheet == null)
+                {
+                    _logger.LogWarning("Ana sayfa bulunamadı: {SheetName}, ilk sayfa kullanılıyor", parser.MainSheetName);
+                    worksheet = package.Workbook.Worksheets.FirstOrDefault();
+                }
+            }
+            else
+            {
+                worksheet = package.Workbook.Worksheets.FirstOrDefault();
+            }
 
             if (worksheet == null || worksheet.Dimension == null)
                 return rows;
@@ -674,10 +823,10 @@ public class ExcelImportService : IExcelImportService
     // FindOrCreateMusteriAsync kaldırıldı - TC/VKN olmadan müşteri oluşturma devre dışı
     // İleride SigortaliAdi ile müşteri eşleştirme/oluşturma eklenebilir
 
-    private static sbyte GetZeyilNoAsSbyte(string? value)
+    private static int GetZeyilNoAsInt(string? value)
     {
         if (string.IsNullOrEmpty(value)) return 0;
-        if (sbyte.TryParse(value, out var result))
+        if (int.TryParse(value, out var result))
             return result;
         return 0;
     }

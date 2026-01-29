@@ -27,6 +27,9 @@ public record ExcelImportRowDto
     // Müşteri Bilgileri
     public string? SigortaliAdi { get; init; }
     public string? SigortaliSoyadi { get; init; }
+    public string? Tckn { get; init; }           // TC Kimlik No
+    public string? Vkn { get; init; }            // Vergi Kimlik No (kurumsal)
+    public string? Adres { get; init; }          // Sigortalı adresi
 
     // Araç Bilgileri
     public string? Plaka { get; init; }

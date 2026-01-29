@@ -23,7 +23,7 @@ public class PoliceHavuz
     public string Plaka { get; set; } = string.Empty;
 
     [Column("ZeyilNo")]
-    public sbyte ZeyilNo { get; set; }
+    public int ZeyilNo { get; set; }
 
     [Column("YenilemeNo")]
     public sbyte? YenilemeNo { get; set; }

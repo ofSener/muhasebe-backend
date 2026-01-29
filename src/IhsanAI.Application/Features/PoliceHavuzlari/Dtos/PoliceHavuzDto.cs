@@ -17,7 +17,7 @@ public record PoliceHavuzItemDto
     public string? SigortaSirketi { get; init; }
     public int? SigortaSirketiId { get; init; }
     public string? Plaka { get; init; }
-    public sbyte ZeyilNo { get; init; }
+    public int ZeyilNo { get; init; }
     public string? PoliceTipi { get; init; }
     public string? PoliceKesenPersonel { get; init; }
 

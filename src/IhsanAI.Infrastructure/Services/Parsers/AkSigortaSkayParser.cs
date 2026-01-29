@@ -315,12 +315,18 @@ public class AkSigortaSkayParser : BaseExcelParser
         if (!row.BaslangicTarihi.HasValue && !row.TanzimTarihi.HasValue)
             errors.Add("Tarih bilgisi geçersiz");
 
-        // Net prim veya brüt prim olmalı
-        if ((!row.NetPrim.HasValue || row.NetPrim == 0) &&
-            (!row.BrutPrim.HasValue || row.BrutPrim == 0))
+        // Zeyil kontrolü - robust parsing ile (zeyillerde 0 veya negatif prim olabilir)
+        var isZeyil = IsZeyilPolicy(row.ZeyilNo);
+        if (!isZeyil)
         {
-            errors.Add("Prim bilgisi boş");
+            // Net prim veya brüt prim olmalı
+            if ((!row.NetPrim.HasValue || row.NetPrim == 0) &&
+                (!row.BrutPrim.HasValue || row.BrutPrim == 0))
+            {
+                errors.Add("Prim bilgisi boş");
+            }
         }
+        // Zeyil için prim 0 veya negatif olabilir
 
         return errors;
     }

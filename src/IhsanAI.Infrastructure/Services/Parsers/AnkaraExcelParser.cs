@@ -136,8 +136,11 @@ public class AnkaraExcelParser : BaseExcelParser
         if (!row.BaslangicTarihi.HasValue)
             errors.Add("Poliçe Başlangıç Tarihi geçersiz");
 
-        if (!row.BrutPrim.HasValue || row.BrutPrim == 0)
+        // Zeyil kontrolü - robust parsing ile (zeyillerde 0 veya negatif prim olabilir)
+        var isZeyil = IsZeyilPolicy(row.ZeyilNo);
+        if (!isZeyil && (!row.BrutPrim.HasValue || row.BrutPrim == 0))
             errors.Add("Brüt Prim boş veya sıfır");
+        // Zeyil için prim 0 veya negatif olabilir
 
         return errors;
     }

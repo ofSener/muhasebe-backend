@@ -25,6 +25,16 @@ public interface IExcelParser
     int? HeaderRowIndex { get; }
 
     /// <summary>
+    /// Ana sayfa adı (null ise ilk sayfayı kullanır)
+    /// </summary>
+    string? MainSheetName => null;
+
+    /// <summary>
+    /// Ek olarak okunması gereken sayfa isimleri (ör: Sigortalilar)
+    /// </summary>
+    string[]? AdditionalSheetNames => null;
+
+    /// <summary>
     /// Bu parser'ın dosyayı parse edip edemeyeceğini kontrol eder
     /// </summary>
     bool CanParse(string fileName, IEnumerable<string> headerColumns);
@@ -33,4 +43,12 @@ public interface IExcelParser
     /// Excel satırlarını parse eder
     /// </summary>
     List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows);
+
+    /// <summary>
+    /// Ek sayfa verilerini kullanarak parse eder (ör: Sigortalilar sayfasından TC/Ad/Soyad)
+    /// </summary>
+    List<ExcelImportRowDto> ParseWithAdditionalSheets(
+        IEnumerable<IDictionary<string, object?>> mainRows,
+        Dictionary<string, List<IDictionary<string, object?>>> additionalSheets)
+        => Parse(mainRows);  // Default: sadece ana sayfayı parse et
 }

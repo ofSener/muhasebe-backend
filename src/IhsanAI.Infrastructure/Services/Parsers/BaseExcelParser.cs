@@ -16,6 +16,16 @@ public abstract class BaseExcelParser : IExcelParser
     /// </summary>
     public virtual int? HeaderRowIndex => null;
 
+    /// <summary>
+    /// Ana sayfa adı (null ise ilk sayfayı kullanır)
+    /// </summary>
+    public virtual string? MainSheetName => null;
+
+    /// <summary>
+    /// Ek olarak okunması gereken sayfa isimleri
+    /// </summary>
+    public virtual string[]? AdditionalSheetNames => null;
+
     protected abstract string[] RequiredColumns { get; }
 
     /// <summary>
@@ -61,6 +71,18 @@ public abstract class BaseExcelParser : IExcelParser
     }
 
     public abstract List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows);
+
+    /// <summary>
+    /// Ek sayfa verilerini kullanarak parse eder.
+    /// Alt sınıflar bunu override ederek Sigortalilar gibi ek sayfalardan veri alabilir.
+    /// </summary>
+    public virtual List<ExcelImportRowDto> ParseWithAdditionalSheets(
+        IEnumerable<IDictionary<string, object?>> mainRows,
+        Dictionary<string, List<IDictionary<string, object?>>> additionalSheets)
+    {
+        // Default: sadece ana sayfayı parse et
+        return Parse(mainRows);
+    }
 
     #region Helper Methods
 
@@ -219,12 +241,164 @@ public abstract class BaseExcelParser : IExcelParser
         return null;
     }
 
-    protected static sbyte GetZeyilNo(string? value)
+    protected static int GetZeyilNo(string? value)
     {
         if (string.IsNullOrEmpty(value)) return 0;
-        if (sbyte.TryParse(value, out var result))
+
+        // Trim whitespace
+        value = value.Trim();
+
+        // Handle decimal format like "1.0" or "1,0"
+        if (value.Contains('.') || value.Contains(','))
+        {
+            if (decimal.TryParse(value.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var decResult))
+                return (int)decResult;
+        }
+
+        if (int.TryParse(value, out var result))
             return result;
         return 0;
+    }
+
+    /// <summary>
+    /// Zeyil poliçesi mi kontrol eder (ZeyilNo > 0 ise zeyildir)
+    /// </summary>
+    protected static bool IsZeyilPolicy(string? zeyilNo)
+    {
+        if (string.IsNullOrWhiteSpace(zeyilNo)) return false;
+
+        var zeyilValue = GetZeyilNo(zeyilNo);
+        return zeyilValue > 0;
+    }
+
+    /// <summary>
+    /// Ürün adından BransId çıkarır
+    /// Quick Sigorta UrunAd örnekleri:
+    /// - TRAFİK SİGORTASI
+    /// - GENİŞLETİLMİŞ KASKO SİGORTASI
+    /// - ZORUNLU DEPREM SİGORTASI
+    /// - SEYAHAT SAĞLIK
+    /// - KASKONOMİQ KASKO
+    /// - QUICK TAMAMLAYICI SAGLIK
+    /// </summary>
+    protected static int? DetectBransIdFromUrunAdi(string? urunAdi, bool isZeyil = false)
+    {
+        if (string.IsNullOrWhiteSpace(urunAdi)) return null;
+
+        var value = urunAdi.ToUpperInvariant()
+            .Replace("İ", "I")
+            .Replace("Ğ", "G")
+            .Replace("Ü", "U")
+            .Replace("Ş", "S")
+            .Replace("Ö", "O")
+            .Replace("Ç", "C");
+
+        // Trafik kontrolü - "TRAFİK SİGORTASI", "ZMSS", "ZORUNLU MALİ"
+        if (value.Contains("TRAFIK") || value.Contains("TRAFFIC") || value.Contains("ZMSS") || value.Contains("ZORUNLU MALI"))
+        {
+            return isZeyil ? 13 : 0; // 13: Trafik Zeyil, 0: Trafik
+        }
+
+        // Kasko kontrolü - "GENİŞLETİLMİŞ KASKO SİGORTASI", "KASKONOMİQ KASKO"
+        if (value.Contains("KASKO"))
+        {
+            return isZeyil ? 14 : 1; // 14: Kasko Zeyil, 1: Kasko
+        }
+
+        // DASK - "ZORUNLU DEPREM SİGORTASI"
+        if (value.Contains("DASK") || value.Contains("DEPREM"))
+            return 2;
+
+        // Sağlık türleri (spesifikten genele)
+        // "SEYAHAT SAĞLIK"
+        if (value.Contains("SEYAHAT"))
+            return 8; // Seyahat Sağlık
+        // "QUICK TAMAMLAYICI SAGLIK"
+        if (value.Contains("TAMAMLAYICI"))
+            return 16; // Tamamlayıcı Sağlık
+        if (value.Contains("YABANCI") && value.Contains("SAGLIK"))
+            return 15; // Yabancı Sağlık
+        if (value.Contains("AYAKTA"))
+            return 23; // Sağlık Ayakta
+        if (value.Contains("YATARAK"))
+            return 22; // Sağlık Yatarak
+        if (value.Contains("SAGLIK"))
+            return 7; // Genel Sağlık
+
+        // Ferdi Kaza
+        if (value.Contains("FERDI KAZA") || value.Contains("FERDI_KAZA") || value.Contains("FK"))
+            return 3;
+
+        // Koltuk
+        if (value.Contains("KOLTUK"))
+            return 4;
+
+        // Konut
+        if (value.Contains("KONUT") || value.Contains("MESKEN"))
+            return 5;
+
+        // Nakliyat
+        if (value.Contains("NAKLIYAT") || value.Contains("NAKLIYE") || value.Contains("EMTEA"))
+            return 6;
+
+        // İşyeri
+        if (value.Contains("ISYERI") || value.Contains("IS YERI") || value.Contains("TIBBI MALP"))
+            return 9;
+
+        // ZKTM (Zorunlu Karayolu Taşımacılık Mali)
+        if (value.Contains("ZKTM") || value.Contains("KARAYOLU TASIMACI"))
+            return 10;
+
+        // IMM (İhtiyari Mali Mesuliyet)
+        if (value.Contains("IMM") || value.Contains("IHTIYARI MALI"))
+            return 12;
+
+        // Makbuz
+        if (value.Contains("MAKBUZ"))
+            return 17;
+
+        // Doğal Koruma
+        if (value.Contains("DOGAL KORUMA") || value.Contains("DOGAL AFET"))
+            return 19;
+
+        // Tarım
+        if (value.Contains("TARIM") || value.Contains("ZIRAI") || value.Contains("HAYVAN"))
+            return 20;
+
+        // Yangın
+        if (value.Contains("YANGIN"))
+            return 21;
+
+        // Hukuksal Koruma
+        if (value.Contains("HUKUKSAL") || value.Contains("HUKUKI"))
+            return 24;
+
+        // Tekne
+        if (value.Contains("TEKNE") || value.Contains("YATA") || value.Contains("DENIZ"))
+            return 25;
+
+        // Hayat
+        if (value.Contains("HAYAT") || value.Contains("YASAM"))
+            return 26;
+
+        // Yeşil Kart
+        if (value.Contains("YESIL KART") || value.Contains("GREEN CARD"))
+            return 27;
+
+        // Mühendislik
+        if (value.Contains("MUHENDISLIK") || value.Contains("INSAAT") || value.Contains("MAKINE KIRILMA"))
+            return 28;
+
+        // Sorumluluk
+        if (value.Contains("SORUMLULUK") || value.Contains("MESLEK") || value.Contains("URUN SORUMLUL"))
+            return 29;
+
+        // Yol Destek
+        if (value.Contains("YOL DESTEK") || value.Contains("YARDIM"))
+            return 30;
+
+        // Bilinmiyor
+        return 255;
     }
 
     protected virtual List<string> ValidateRow(ExcelImportRowDto row)
@@ -240,8 +414,12 @@ public abstract class BaseExcelParser : IExcelParser
         if (!row.BitisTarihi.HasValue)
             errors.Add("Bitiş Tarihi geçersiz");
 
-        if (!row.BrutPrim.HasValue || row.BrutPrim <= 0)
+        // Zeyil poliçelerde negatif veya sıfır prim olabilir
+        var isZeyil = IsZeyilPolicy(row.ZeyilNo);
+        if (!row.BrutPrim.HasValue)
             errors.Add("Brüt Prim geçersiz");
+        else if (!isZeyil && row.BrutPrim <= 0)
+            errors.Add("Brüt Prim geçersiz (yeni poliçe için prim pozitif olmalıdır)");
 
         // TC/VKN doğrulama kaldırıldı - artık DTO'da bu alan yok
 

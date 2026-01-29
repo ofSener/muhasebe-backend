@@ -175,11 +175,17 @@ public class SompoExcelParser : BaseExcelParser
         if (!row.TanzimTarihi.HasValue && !row.BaslangicTarihi.HasValue)
             errors.Add("Tarih bilgisi geçersiz");
 
-        if ((!row.BrutPrim.HasValue || row.BrutPrim == 0) &&
-            (!row.NetPrim.HasValue || row.NetPrim == 0))
+        // Zeyil kontrolü - robust parsing ile (zeyillerde 0 veya negatif prim olabilir)
+        var isZeyil = IsZeyilPolicy(row.ZeyilNo);
+        if (!isZeyil)
         {
-            errors.Add("Prim bilgisi boş veya sıfır");
+            if ((!row.BrutPrim.HasValue || row.BrutPrim == 0) &&
+                (!row.NetPrim.HasValue || row.NetPrim == 0))
+            {
+                errors.Add("Prim bilgisi boş veya sıfır");
+            }
         }
+        // Zeyil için prim 0 veya negatif olabilir
 
         return errors;
     }

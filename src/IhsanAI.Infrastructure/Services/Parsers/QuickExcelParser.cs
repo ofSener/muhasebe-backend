@@ -4,15 +4,16 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 
 /// <summary>
 /// Quick Sigorta Excel parser
-/// Sheet: PoliceListesi
+/// Ana Sheet: PoliceListesi
+/// Ek Sheet: Sigortalilar (TC, Ad, Soyad bilgileri için PoliceNo+ZeyilNo ile join edilir)
 ///
-/// MAPPING:
+/// MAPPING (PoliceListesi sayfasından):
 /// *PoliceNo       = "PoliceNo"             [OK]
 /// *YenilemeNo     = "YenilemeNo"           [OK]
 /// *ZeyilNo        = "ZeyilNo"              [OK]
 /// *ZeyilTipKodu   = "ZeyilTipKodu"         [OK]
 /// *Brans          = "UrunAd"               [OK]
-/// *PoliceTipi     = YOK                    [NO]
+/// *PoliceTipi     = "ZeyilAd" (İPTAL içeriyorsa)  [OK]
 /// *TanzimTarihi   = "TanzimTarihi"         [OK]
 /// *BaslangicTarihi= "BaslamaTarihi"        [OK]
 /// *BitisTarihi    = "BitisTarihi"          [OK]
@@ -21,16 +22,28 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// *BrutPrim       = "BrutPrimTL"           [OK]
 /// *NetPrim        = "NetPrimTL"            [OK]
 /// *Komisyon       = "AcenteKomisyonTL"     [OK]
-/// *SigortaliAdi   = YOK                    [NO]
-/// *SigortaliSoyadi= YOK                    [NO]
-/// *Plaka          = YOK                    [NO]
 /// *AcenteNo       = "AcenteNo"             [OK]
+/// *Plaka          = "Plaka"                [OK]
+///
+/// MAPPING (Sigortalilar sayfasından - PoliceNo+ZeyilNo ile eşleşir):
+/// *SigortaliAdi   = "Ad"                   [OK]
+/// *SigortaliSoyadi= "Soyad"                [OK]
+/// *Tckn           = "Tckn"                 [OK]
+/// *Vkn            = "Vkn"                  [OK]
+/// *FirmaAd        = "FirmaAd" (kurumsal)   [OK]
+/// *Adres          = "Adres"                [OK]
 /// </summary>
 public class QuickExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 3;
     public override string SirketAdi => "Quick Sigorta";
     public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck", "police_listesi", "policelistesi" };
+
+    // Ana sayfa: PoliceListesi
+    public override string? MainSheetName => "PoliceListesi";
+
+    // Ek sayfa: Sigortalilar (TC, Ad, Soyad bilgileri burada)
+    public override string[]? AdditionalSheetNames => new[] { "Sigortalilar" };
 
     // RequiredColumns - hem camelCase hem UPPER_CASE formatları destekleniyor
     protected override string[] RequiredColumns => new[]
@@ -44,7 +57,54 @@ public class QuickExcelParser : BaseExcelParser
         "POLICE_HAREKET_NO", "EKBELGE_NO"  // Bu kombinasyon sadece Quick Police_Listesi'nde var
     };
 
-    public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
+    /// <summary>
+    /// Sigortalilar sayfasından oluşturulan lookup için kayıt
+    /// </summary>
+    private record SigortaliInfo(string? Tckn, string? Vkn, string? Ad, string? Soyad, string? FirmaAd, string? Adres);
+
+    public override List<ExcelImportRowDto> ParseWithAdditionalSheets(
+        IEnumerable<IDictionary<string, object?>> mainRows,
+        Dictionary<string, List<IDictionary<string, object?>>> additionalSheets)
+    {
+        // Sigortalilar sayfasından lookup oluştur
+        var sigortaliLookup = new Dictionary<string, SigortaliInfo>(StringComparer.OrdinalIgnoreCase);
+
+        if (additionalSheets.TryGetValue("Sigortalilar", out var sigortaliRows))
+        {
+            foreach (var row in sigortaliRows)
+            {
+                var policeNo = GetStringValue(row, "PoliceNo", "POLICENO", "POLİCENO");
+                var zeyilNo = GetStringValue(row, "ZeyilNo", "ZEYILNO", "ZEYİLNO") ?? "0";
+
+                if (string.IsNullOrWhiteSpace(policeNo))
+                    continue;
+
+                var key = $"{policeNo}_{GetZeyilNo(zeyilNo)}";
+
+                // Aynı PoliceNo+ZeyilNo için ilk kaydı al
+                if (!sigortaliLookup.ContainsKey(key))
+                {
+                    // Exact match kullan (Ad/Adres karışmasın diye)
+                    var info = new SigortaliInfo(
+                        Tckn: GetExactColumnValue(row, "Tckn"),
+                        Vkn: GetExactColumnValue(row, "Vkn"),
+                        Ad: GetExactColumnValue(row, "Ad"),
+                        Soyad: GetExactColumnValue(row, "Soyad"),
+                        FirmaAd: GetExactColumnValue(row, "FirmaAd"),
+                        Adres: GetExactColumnValue(row, "Adres")
+                    );
+                    sigortaliLookup[key] = info;
+                }
+            }
+        }
+
+        // Ana sayfayı parse et ve sigortalı bilgilerini ekle
+        return ParseWithLookup(mainRows, sigortaliLookup);
+    }
+
+    private List<ExcelImportRowDto> ParseWithLookup(
+        IEnumerable<IDictionary<string, object?>> rows,
+        Dictionary<string, SigortaliInfo> sigortaliLookup)
     {
         var result = new List<ExcelImportRowDto>();
         int rowNumber = 0;
@@ -53,12 +113,36 @@ public class QuickExcelParser : BaseExcelParser
         {
             rowNumber++;
 
-            // Büyük/küçük harf ve alt çizgili alternatifler destekleniyor
-            // Police_Listesi formatı: POLICE_NO, POLICE_BASLAMA_TARIH, PRIM_TL vs.
             var policeNo = GetStringValue(row, "PoliceNo", "POLICENO", "POLİCE NO", "POLICE NO", "POLICE_NO");
 
             if (string.IsNullOrWhiteSpace(policeNo))
                 continue;
+
+            var zeyilNo = GetStringValue(row, "ZeyilNo", "ZEYILNO", "ZEYİLNO", "SIRA_NO", "EKBELGE_NO");
+            var urunAdi = GetStringValue(row, "UrunAd", "URUNAD", "ÜRÜNAD", "URUN_AD", "MODELLEME_URUN_AD");
+            var isZeyil = IsZeyilPolicy(zeyilNo);
+
+            // Sigortalı bilgilerini lookup'tan al
+            var lookupKey = $"{policeNo}_{GetZeyilNo(zeyilNo)}";
+            sigortaliLookup.TryGetValue(lookupKey, out var sigortaliInfo);
+
+            // Ad ve Soyad - Sigortalilar sayfasından
+            var ad = sigortaliInfo?.Ad;
+            var soyad = sigortaliInfo?.Soyad;
+
+            // Kurumsal müşteri ise (Ad ve Soyad boş, FirmaAd var) firma adını kullan
+            if (string.IsNullOrWhiteSpace(ad) && string.IsNullOrWhiteSpace(soyad))
+            {
+                if (!string.IsNullOrWhiteSpace(sigortaliInfo?.FirmaAd))
+                {
+                    ad = sigortaliInfo.FirmaAd;
+                }
+                else
+                {
+                    // Fallback: PoliceListesi'ndeki SigortaliAdi (varsa)
+                    ad = GetStringValue(row, "SigortaliAdi", "SIGORTALI_ADI", "SIGORTALI_AD_SOYAD");
+                }
+            }
 
             var dto = new ExcelImportRowDto
             {
@@ -67,26 +151,30 @@ public class QuickExcelParser : BaseExcelParser
                 // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
                 YenilemeNo = GetStringValue(row, "YenilemeNo", "YENILEMENO", "YENILEME_NO"),
-                ZeyilNo = GetStringValue(row, "ZeyilNo", "ZEYILNO", "ZEYİLNO", "SIRA_NO", "EKBELGE_NO"),
+                ZeyilNo = zeyilNo,
                 ZeyilTipKodu = GetStringValue(row, "ZeyilTipKodu", "ZEYILTIPKODU", "ZEYİLTİPKODU", "EKBELGE_KOD"),
-                Brans = GetStringValue(row, "UrunAd", "URUNAD", "ÜRÜNAD", "URUN_AD", "MODELLEME_URUN_AD"),
+                Brans = urunAdi,
+                BransId = DetectBransIdFromUrunAdi(urunAdi, isZeyil),
                 PoliceTipi = GetPoliceTipiFromPrim(row),
 
-                // Tarihler - Police_Listesi formatı: POLICE_TANZIM_TARIH, POLICE_BASLAMA_TARIH
+                // Tarihler
                 TanzimTarihi = GetDateValue(row, "TanzimTarihi", "TANZIMTARIHI", "TANZİMTARİHİ", "POLICE_TANZIM_TARIH", "TANZIM_TARIH"),
                 BaslangicTarihi = GetDateValue(row, "BaslamaTarihi", "BASLAMATARIHI", "BAŞLAMATARIHI", "POLICE_BASLAMA_TARIH", "BASLAMA_TARIH"),
                 BitisTarihi = GetDateValue(row, "BitisTarihi", "BITISTARIHI", "BİTİŞTARİHİ", "POLICE_BITIS_TARIH", "BITIS_TARIH"),
-                ZeyilOnayTarihi = null,  // Quick'te yok
-                ZeyilBaslangicTarihi = null,  // Quick'te yok
+                ZeyilOnayTarihi = null,
+                ZeyilBaslangicTarihi = null,
 
-                // Primler - Police_Listesi formatı: PRIM_TL, NET_PRIM_TL
+                // Primler
                 BrutPrim = GetDecimalValue(row, "BrutPrimTL", "BrutPrim", "BRUTPRIMTL", "BRUTPRIM", "BRUT_PRIM", "PRIM_TL", "PRIM"),
                 NetPrim = GetDecimalValue(row, "NetPrimTL", "NetPrim", "NETPRIMTL", "NETPRIM", "NET_PRIM_TL", "NET_PRIM"),
                 Komisyon = GetDecimalValue(row, "AcenteKomisyonTL", "AcenteKomisyon", "ACENTEKOMISYONTL", "ACENTEKOMISYON", "ACENTE_KOMISYON"),
 
-                // Müşteri Bilgileri
-                SigortaliAdi = GetStringValue(row, "SigortaliAdi", "SIGORTALI_ADI", "SIGORTALI_AD_SOYAD"),
-                SigortaliSoyadi = null,
+                // Müşteri Bilgileri - Sigortalilar sayfasından
+                SigortaliAdi = ad,
+                SigortaliSoyadi = soyad,
+                Tckn = sigortaliInfo?.Tckn,
+                Vkn = sigortaliInfo?.Vkn,
+                Adres = sigortaliInfo?.Adres,
 
                 // Araç Bilgileri
                 Plaka = GetStringValue(row, "Plaka", "PLAKA"),
@@ -101,8 +189,8 @@ public class QuickExcelParser : BaseExcelParser
                 dto = dto with { TanzimTarihi = dto.BaslangicTarihi };
             }
 
-            // Brüt prim yoksa net prim'i kullan
-            if ((!dto.BrutPrim.HasValue || dto.BrutPrim == 0) && dto.NetPrim.HasValue)
+            // Zeyil değilse ve brüt prim yoksa/0 ise net prim'i kullan
+            if (!isZeyil && (!dto.BrutPrim.HasValue || dto.BrutPrim == 0) && dto.NetPrim.HasValue)
             {
                 dto = dto with { BrutPrim = dto.NetPrim };
             }
@@ -118,6 +206,12 @@ public class QuickExcelParser : BaseExcelParser
         }
 
         return result;
+    }
+
+    public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
+    {
+        // Sigortalilar sayfası olmadan parse - eski davranış
+        return ParseWithLookup(rows, new Dictionary<string, SigortaliInfo>(StringComparer.OrdinalIgnoreCase));
     }
 
     private string GetPoliceTipiFromPrim(IDictionary<string, object?> row)
@@ -144,6 +238,25 @@ public class QuickExcelParser : BaseExcelParser
         return brutPrim < 0 ? "İPTAL" : "TAHAKKUK";
     }
 
+    /// <summary>
+    /// Tam kolon adı eşleşmesi yapar (Ad/Adres karışmaması için)
+    /// </summary>
+    private static string? GetExactColumnValue(IDictionary<string, object?> row, string columnName)
+    {
+        // Önce tam eşleşme dene
+        var key = row.Keys.FirstOrDefault(k =>
+            k.Equals(columnName, StringComparison.OrdinalIgnoreCase));
+
+        if (key != null && row.TryGetValue(key, out var value) && value != null)
+        {
+            var strValue = value.ToString()?.Trim();
+            if (!string.IsNullOrWhiteSpace(strValue))
+                return strValue;
+        }
+
+        return null;
+    }
+
     protected override List<string> ValidateRow(ExcelImportRowDto row)
     {
         var errors = new List<string>();
@@ -154,12 +267,19 @@ public class QuickExcelParser : BaseExcelParser
         if (!row.BaslangicTarihi.HasValue && !row.TanzimTarihi.HasValue)
             errors.Add("Tarih bilgisi geçersiz");
 
-        // Brüt prim veya net prim olmalı
-        if ((!row.BrutPrim.HasValue || row.BrutPrim == 0) &&
-            (!row.NetPrim.HasValue || row.NetPrim == 0))
+        // Zeyil kontrolü - robust parsing ile
+        var isZeyil = IsZeyilPolicy(row.ZeyilNo);
+
+        // Brüt prim veya net prim olmalı (zeyillerde 0 veya negatif olabilir)
+        if (!isZeyil)
         {
-            errors.Add("Prim bilgisi boş veya sıfır");
+            if ((!row.BrutPrim.HasValue || row.BrutPrim == 0) &&
+                (!row.NetPrim.HasValue || row.NetPrim == 0))
+            {
+                errors.Add("Prim bilgisi boş veya sıfır");
+            }
         }
+        // Zeyil için prim 0 veya negatif olabilir, null kontrolü yapılmıyor
 
         return errors;
     }
