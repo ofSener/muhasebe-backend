@@ -62,6 +62,20 @@ public static class PoliceHavuzlariEndpoints
         .WithName("BatchApprovePoolPolicies")
         .WithDescription("Birden fazla havuz poliçesini toplu onaylama");
 
+        group.MapPut("/batch-update", async (BatchUpdatePoliceHavuzlariCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(new
+            {
+                success = result.FailedCount == 0,
+                updatedCount = result.UpdatedCount,
+                failedCount = result.FailedCount,
+                failedIds = result.FailedIds
+            });
+        })
+        .WithName("BatchUpdatePoliceHavuzlari")
+        .WithDescription("Havuzdaki poliçeleri toplu güncelle");
+
         return app;
     }
 }
