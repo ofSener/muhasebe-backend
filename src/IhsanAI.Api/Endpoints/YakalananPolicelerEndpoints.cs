@@ -1,5 +1,6 @@
 using MediatR;
 using IhsanAI.Application.Features.YakalananPoliceler.Queries;
+using IhsanAI.Application.Features.YakalananPoliceler.Commands;
 
 namespace IhsanAI.Api.Endpoints;
 
@@ -40,6 +41,20 @@ public static class YakalananPolicelerEndpoints
         })
         .WithName("GetYakalananPoliceStats")
         .WithDescription("Yakalanan poliçe istatistiklerini getirir (yetki bazlı filtreleme ile)");
+
+        group.MapPut("/batch-update", async (BatchUpdateYakalananPolicelerCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(new
+            {
+                success = result.FailedCount == 0,
+                updatedCount = result.UpdatedCount,
+                failedCount = result.FailedCount,
+                failedIds = result.FailedIds
+            });
+        })
+        .WithName("BatchUpdateYakalananPoliceler")
+        .WithDescription("Yakalanan poliçeleri toplu güncelle");
 
         return app;
     }
