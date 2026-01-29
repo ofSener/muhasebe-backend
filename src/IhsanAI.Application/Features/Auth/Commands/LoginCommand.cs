@@ -71,7 +71,12 @@ public record PermissionsDto
 }
 
 // Login Command
-public record LoginCommand(string Email, string Password) : IRequest<LoginResponse>;
+public record LoginCommand(
+    string Email,
+    string Password,
+    string? IpAddress = null,
+    string? DeviceInfo = null
+) : IRequest<LoginResponse>;
 
 // Login Command Handler
 public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
@@ -120,6 +125,18 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             };
         }
 
+        // Eski aktif token'ları iptal et (Güvenlik: Aynı kullanıcının birden fazla aktif token'ı olmasın)
+        var existingTokens = await _context.MuhasebeKullaniciTokens
+            .Where(t => t.KullaniciId == kullanici.Id && t.IsActive && !t.IsRevoked)
+            .ToListAsync(cancellationToken);
+
+        foreach (var existingToken in existingTokens)
+        {
+            existingToken.IsRevoked = true;
+            existingToken.RevokedAt = _dateTimeService.Now;
+            existingToken.RevokeReason = "Yeni giriş yapıldı";
+        }
+
         // Get user permissions
         var yetki = kullanici.MuhasebeYetkiId.HasValue
             ? await _context.Yetkiler.FirstOrDefaultAsync(y => y.Id == kullanici.MuhasebeYetkiId, cancellationToken)
@@ -143,13 +160,26 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
         var refreshToken = GenerateRefreshToken();
 
-        // Update user's last login and token info
+        // Update user's last login
         kullanici.SonGirisZamani = _dateTimeService.Now;
-        kullanici.Token = token;
-        kullanici.TokenExpiry = _dateTimeService.Now.AddMinutes(expirationMinutes);
-        kullanici.RefreshToken = refreshToken;
-        kullanici.RefreshTokenExpiry = _dateTimeService.Now.AddDays(7);
 
+        // Yeni token kaydı oluştur (Muhasebe özel token tablosunda)
+        var muhasebeToken = new Domain.Entities.MuhasebeKullaniciToken
+        {
+            KullaniciId = kullanici.Id,
+            AccessToken = token,
+            AccessTokenExpiry = _dateTimeService.Now.AddMinutes(expirationMinutes),
+            RefreshToken = refreshToken,
+            RefreshTokenExpiry = _dateTimeService.Now.AddDays(7),
+            DeviceInfo = request.DeviceInfo,
+            IpAddress = request.IpAddress,
+            IsActive = true,
+            IsRevoked = false,
+            CreatedAt = _dateTimeService.Now,
+            LastUsedAt = _dateTimeService.Now
+        };
+
+        _context.MuhasebeKullaniciTokens.Add(muhasebeToken);
         await _context.SaveChangesAsync(cancellationToken);
 
         return new LoginResponse

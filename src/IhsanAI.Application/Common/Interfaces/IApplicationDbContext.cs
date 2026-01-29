@@ -24,6 +24,7 @@ public interface IApplicationDbContext
     DbSet<FirmaDriveToken> FirmaDriveTokens { get; }
     DbSet<DriveUploadLog> DriveUploadLogs { get; }
     DbSet<Brans> Branslar { get; }
+    DbSet<MuhasebeKullaniciToken> MuhasebeKullaniciTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
