@@ -46,7 +46,7 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             query = query.Where(x => x.TanzimTarihi <= endDate);
         }
 
-        // Sıralama - varsayılan BaslangicTarihi DESC
+        // Sıralama - varsayılan TanzimTarihi DESC
         query = (request.SortBy?.ToLower(), request.SortDir?.ToLower()) switch
         {
             ("baslangictarihi", "asc") => query.OrderBy(x => x.BaslangicTarihi),
@@ -59,8 +59,8 @@ public class GetYakalananPolicelerQueryHandler : IRequestHandler<GetYakalananPol
             ("sigortaliadi", "desc") => query.OrderByDescending(x => x.SigortaliAdi),
             ("policenumara", "asc") => query.OrderBy(x => x.PoliceNumarasi),
             ("policenumara", "desc") => query.OrderByDescending(x => x.PoliceNumarasi),
-            ("eklenmeTarihi", "asc") => query.OrderBy(x => x.EklenmeTarihi),
-            ("eklenmeTarihi", "desc") => query.OrderByDescending(x => x.EklenmeTarihi),
+            ("eklenmetarihi", "asc") => query.OrderBy(x => x.EklenmeTarihi),
+            ("eklenmetarihi", "desc") => query.OrderByDescending(x => x.EklenmeTarihi),
             _ => query.OrderByDescending(x => x.TanzimTarihi) // Default: TanzimTarihi DESC
         };
 

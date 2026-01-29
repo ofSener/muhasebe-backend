@@ -41,28 +41,10 @@ public class GetYakalananPoliceStatsQueryHandler : IRequestHandler<GetYakalananP
 
     public async Task<YakalananPoliceStatsDto> Handle(GetYakalananPoliceStatsQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.YakalananPoliceler.AsQueryable();
-
-        // Firma bazlı temel filtre
-        if (_currentUserService.FirmaId.HasValue)
-        {
-            query = query.Where(x => x.FirmaId == _currentUserService.FirmaId.Value);
-        }
-
-        // GorebilecegiPoliceler yetkisine göre filtrele
-        var gorebilecegiPoliceler = _currentUserService.GorebilecegiPoliceler ?? "3";
-        var userId = int.TryParse(_currentUserService.UserId, out var uid) ? uid : 0;
-
-        query = gorebilecegiPoliceler switch
-        {
-            "1" => query, // Tüm firma poliçeleri
-            "2" => _currentUserService.SubeId.HasValue
-                ? query.Where(x => x.SubeId == _currentUserService.SubeId.Value)
-                : query,
-            "3" => query.Where(x => x.UyeId == userId), // Sadece kendi poliçeleri
-            "4" => query.Where(x => false), // Hiçbir poliçeyi göremez
-            _ => query.Where(x => x.UyeId == userId) // Default - sadece kendi poliçeleri
-        };
+        // Liste sorgusuyla aynı yetki filtrelemesini kullan
+        var query = _context.YakalananPoliceler
+            .AsQueryable()
+            .ApplyAuthorizationFilters(_currentUserService);
 
         // Tarih filtreleme (TanzimTarihi'ne göre)
         if (request.StartDate.HasValue)
