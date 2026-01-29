@@ -110,13 +110,30 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
 
         var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
 
-        // Yeni refresh token oluştur (rotation - Güvenlik için eski token iptal edilip yeni oluşturulur)
+        // OPTIMIZASYON: Eğer token çok yeni oluşturulduysa (son 30 saniye), yeni token oluşturma
+        // Sadece LastUsedAt'ı güncelle ve aynı token'ı dön (gereksiz kayıt şişmesini önler)
+        var tokenAge = _dateTimeService.Now - tokenRecord.CreatedAt;
+        if (tokenAge.TotalSeconds < 30)
+        {
+            // Token henüz çok yeni, aynı token'ı kullan
+            tokenRecord.LastUsedAt = _dateTimeService.Now;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new RefreshTokenResponse
+            {
+                Success = true,
+                Token = tokenRecord.AccessToken,
+                RefreshToken = tokenRecord.RefreshToken,
+                ExpiresIn = expirationMinutes * 60
+            };
+        }
+
+        // Token rotation (güvenlik için eski token iptal edilip yeni oluşturulur)
         var newRefreshToken = GenerateRefreshToken();
 
-        // Eski token'ı iptal et
-        tokenRecord.IsRevoked = true;
-        tokenRecord.RevokedAt = _dateTimeService.Now;
-        tokenRecord.RevokeReason = "Refresh token yenilendi (rotation)";
+        // OPTIMIZASYON: Eski token'ı database'den tamamen sil (revoke yerine DELETE)
+        // İptal edilmiş token'ların kayıt şişmesini önler
+        _context.MuhasebeKullaniciTokens.Remove(tokenRecord);
 
         // Yeni token kaydı oluştur
         var newTokenRecord = new Domain.Entities.MuhasebeKullaniciToken

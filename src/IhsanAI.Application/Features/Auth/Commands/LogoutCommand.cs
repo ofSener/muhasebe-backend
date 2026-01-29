@@ -33,9 +33,12 @@ public class LogoutCommandHandler : IRequestHandler<LogoutCommand, LogoutRespons
 
     public async Task<LogoutResponse> Handle(LogoutCommand request, CancellationToken cancellationToken)
     {
-        // Eğer refresh token verilmişse sadece o token'ı revoke et
+        // OPTIMIZASYON: Token'ları revoke etmek yerine database'den sil
+        // Logout sonrası token'a ihtiyaç yok, kayıt şişmesini önle
+
         if (!string.IsNullOrWhiteSpace(request.RefreshToken))
         {
+            // Sadece belirli bir token'ı sil
             var tokenRecord = await _context.MuhasebeKullaniciTokens
                 .FirstOrDefaultAsync(t =>
                     t.KullaniciId == request.KullaniciId &&
@@ -46,15 +49,12 @@ public class LogoutCommandHandler : IRequestHandler<LogoutCommand, LogoutRespons
 
             if (tokenRecord != null)
             {
-                tokenRecord.IsRevoked = true;
-                tokenRecord.RevokedAt = _dateTimeService.Now;
-                tokenRecord.RevokeReason = "Kullanıcı çıkış yaptı (logout)";
-                tokenRecord.IsActive = false;
+                _context.MuhasebeKullaniciTokens.Remove(tokenRecord);
             }
         }
         else
         {
-            // Refresh token yoksa kullanıcının TÜM aktif token'larını revoke et
+            // Kullanıcının TÜM aktif token'larını sil (tüm cihazlardan çıkış)
             var activeTokens = await _context.MuhasebeKullaniciTokens
                 .Where(t =>
                     t.KullaniciId == request.KullaniciId &&
@@ -62,12 +62,9 @@ public class LogoutCommandHandler : IRequestHandler<LogoutCommand, LogoutRespons
                     !t.IsRevoked)
                 .ToListAsync(cancellationToken);
 
-            foreach (var token in activeTokens)
+            if (activeTokens.Count > 0)
             {
-                token.IsRevoked = true;
-                token.RevokedAt = _dateTimeService.Now;
-                token.RevokeReason = "Kullanıcı tüm cihazlardan çıkış yaptı";
-                token.IsActive = false;
+                _context.MuhasebeKullaniciTokens.RemoveRange(activeTokens);
             }
         }
 

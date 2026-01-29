@@ -51,12 +51,9 @@ public class RevokeSessionCommandHandler : IRequestHandler<RevokeSessionCommand,
             };
         }
 
-        // Session'ı revoke et
-        session.IsRevoked = true;
-        session.RevokedAt = _dateTimeService.Now;
-        session.RevokeReason = "Kullanıcı tarafından manuel olarak sonlandırıldı";
-        session.IsActive = false;
-
+        // OPTIMIZASYON: Session'ı revoke etmek yerine database'den sil
+        // Manuel sonlandırılan token'a ihtiyaç yok
+        _context.MuhasebeKullaniciTokens.Remove(session);
         await _context.SaveChangesAsync(cancellationToken);
 
         return new RevokeSessionResponse

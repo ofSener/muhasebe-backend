@@ -125,16 +125,15 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             };
         }
 
-        // Eski aktif token'ları iptal et (Güvenlik: Aynı kullanıcının birden fazla aktif token'ı olmasın)
+        // OPTIMIZASYON: Eski token'ları database'den sil (revoke yerine DELETE)
+        // Kayıt şişmesini önler, aynı cihazdan yeni giriş yapıldığında eski token'a gerek yok
         var existingTokens = await _context.MuhasebeKullaniciTokens
             .Where(t => t.KullaniciId == kullanici.Id && t.IsActive && !t.IsRevoked)
             .ToListAsync(cancellationToken);
 
-        foreach (var existingToken in existingTokens)
+        if (existingTokens.Count > 0)
         {
-            existingToken.IsRevoked = true;
-            existingToken.RevokedAt = _dateTimeService.Now;
-            existingToken.RevokeReason = "Yeni giriş yapıldı";
+            _context.MuhasebeKullaniciTokens.RemoveRange(existingTokens);
         }
 
         // Get user permissions
