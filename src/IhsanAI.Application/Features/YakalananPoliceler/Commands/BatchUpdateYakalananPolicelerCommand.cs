@@ -55,13 +55,13 @@ public class BatchUpdateYakalananPolicelerCommandHandler
             };
         }
 
-        // Lookup dictionary'leri hazırla
-        var kullanicilar = await _context.Kullanicilar
+        // Lookup dictionary'leri hazırla (aynı isimde birden fazla kullanıcı olabilir, ilkini al)
+        var kullanicilarList = await _context.Kullanicilar
             .AsNoTracking()
-            .ToDictionaryAsync(
-                k => $"{k.Adi} {k.Soyadi}".Trim(),
-                k => k.Id,
-                cancellationToken);
+            .ToListAsync(cancellationToken);
+        var kullanicilar = kullanicilarList
+            .GroupBy(k => $"{k.Adi} {k.Soyadi}".Trim())
+            .ToDictionary(g => g.Key, g => g.First().Id);
 
         var subelerList = await _context.Subeler
             .AsNoTracking()
