@@ -12,9 +12,9 @@ public static class PolicelerEndpoints
             .WithTags("Policies")
             .RequireAuthorization();
 
-        group.MapGet("/", async (int? isOrtagiFirmaId, int? limit, IMediator mediator) =>
+        group.MapGet("/", async (int? limit, IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetPolicelerQuery(isOrtagiFirmaId, limit));
+            var result = await mediator.Send(new GetPolicelerQuery(limit));
             return Results.Ok(result);
         })
         .WithName("GetPoliceler")

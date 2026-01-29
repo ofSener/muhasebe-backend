@@ -80,7 +80,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
         }
 
         // Kullanıcının poliçelerini getir
-        var query = _context.Policeler.Where(p => p.IsOrtagiUyeId == currentUserId);
+        var query = _context.Policeler.Where(p => p.UyeId == currentUserId);
 
         // Tarih filtresi
         if (request.StartDate.HasValue)
@@ -96,7 +96,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
         // Branş filtresi
         if (request.BransId.HasValue)
         {
-            query = query.Where(p => p.BransId == request.BransId.Value);
+            query = query.Where(p => p.PoliceTuruId == request.BransId.Value);
         }
 
         var policeler = await query.AsNoTracking().ToListAsync(cancellationToken);
@@ -123,7 +123,7 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             .ToListAsync(cancellationToken))
             .ToDictionary(m => m.Id);
 
-        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
+        var bransIds = policeler.Select(p => p.PoliceTuruId).Distinct().ToList();
         var bransDict = (await _context.Branslar
             .Where(b => bransIds.Contains(b.Id))
             .Select(b => new { b.Id, b.Ad })
@@ -131,14 +131,14 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             .ToListAsync(cancellationToken))
             .ToDictionary(b => b.Id);
 
-        // Toplam kazanç hesapla
-        var toplamKazanc = policeler.Sum(p => p.IsOrtagiKomisyon);
+        // Toplam kazanç hesapla (Komisyon alanını kullanıyoruz)
+        var toplamKazanc = (decimal)policeler.Sum(p => p.Komisyon ?? 0);
 
         // Bu ay kazanç
         var buAyBaslangic = new DateTime(_dateTimeService.Now.Year, _dateTimeService.Now.Month, 1);
-        var buAyKazanc = policeler
+        var buAyKazanc = (decimal)policeler
             .Where(p => p.EklenmeTarihi >= buAyBaslangic)
-            .Sum(p => p.IsOrtagiKomisyon);
+            .Sum(p => p.Komisyon ?? 0);
 
         // Şimdilik tüm kazançları "Bekliyor" olarak kabul ediyoruz
         // İleride ödeme tablosu eklendiğinde bu güncellenecek
@@ -153,9 +153,9 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             var ayBaslangic = new DateTime(ay.Year, ay.Month, 1);
             var ayBitis = ayBaslangic.AddMonths(1);
 
-            var aylikTutar = policeler
+            var aylikTutar = (decimal)policeler
                 .Where(p => p.EklenmeTarihi >= ayBaslangic && p.EklenmeTarihi < ayBitis)
-                .Sum(p => p.IsOrtagiKomisyon);
+                .Sum(p => p.Komisyon ?? 0);
 
             aylikTrend.Add(new MonthlyEarning
             {
@@ -166,14 +166,14 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
 
         // Türe göre dağılım - O(1) dictionary lookup
         var tureGoreDagilim = policeler
-            .GroupBy(p => p.BransId)
+            .GroupBy(p => p.PoliceTuruId)
             .Select(g =>
             {
                 bransDict.TryGetValue(g.Key, out var brans);
                 return new EarningByType
                 {
                     SigortaTuru = brans?.Ad ?? $"Branş #{g.Key}",
-                    Tutar = g.Sum(p => p.IsOrtagiKomisyon),
+                    Tutar = (decimal)g.Sum(p => p.Komisyon ?? 0),
                     PoliceAdedi = g.Count()
                 };
             })
@@ -188,20 +188,20 @@ public class GetMyEarningsQueryHandler : IRequestHandler<GetMyEarningsQuery, MyE
             {
                 sirketDict.TryGetValue(p.SigortaSirketiId, out var sirket);
                 musteriDict.TryGetValue(p.MusteriId ?? 0, out var musteri);
-                bransDict.TryGetValue(p.BransId, out var brans);
+                bransDict.TryGetValue(p.PoliceTuruId, out var brans);
 
                 return new EarningDetail
                 {
                     PoliceId = p.Id,
-                    PoliceNo = p.PoliceNo,
+                    PoliceNo = p.PoliceNumarasi,
                     Tarih = p.EklenmeTarihi,
                     MusteriAdi = musteri != null ? $"{musteri.Adi} {musteri.Soyadi}".Trim() : "Bilinmiyor",
                     SigortaSirketi = sirket?.FirmaAdi ?? $"Şirket #{p.SigortaSirketiId}",
-                    SigortaTuru = brans?.Ad ?? $"Branş #{p.BransId}",
-                    NetPrim = p.NetPrim,
-                    SirketKomisyonu = p.Komisyon,
-                    KomisyonOrani = p.IsOrtagiKomisyonOrani,
-                    Kazanc = p.IsOrtagiKomisyon,
+                    SigortaTuru = brans?.Ad ?? $"Branş #{p.PoliceTuruId}",
+                    NetPrim = (decimal)p.NetPrim,
+                    SirketKomisyonu = (decimal)(p.Komisyon ?? 0),
+                    KomisyonOrani = 0, // Bu alan entity'de mevcut değil
+                    Kazanc = (decimal)(p.Komisyon ?? 0),
                     OdemeDurumu = "Bekliyor" // İleride ödeme tablosu ile güncellenecek
                 };
             })

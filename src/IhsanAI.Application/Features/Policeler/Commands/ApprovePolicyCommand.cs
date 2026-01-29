@@ -34,7 +34,7 @@ public class ApprovePolicyCommandHandler : IRequestHandler<ApprovePolicyCommand,
         var query = _context.Policeler.AsQueryable();
 
         // Firma filtresi uygula
-        query = query.ApplyFirmaFilter(_currentUserService, x => x.IsOrtagiFirmaId);
+        query = query.ApplyFirmaFilter(_currentUserService, x => x.FirmaId);
 
         var policy = await query.FirstOrDefaultAsync(x => x.Id == request.PolicyId, cancellationToken);
 
@@ -58,7 +58,7 @@ public class ApprovePolicyCommandHandler : IRequestHandler<ApprovePolicyCommand,
 
         policy.OnayDurumu = 1;
         policy.GuncellenmeTarihi = DateTime.UtcNow;
-        policy.GuncelleyenKullaniciId = _currentUserService.UyeId ?? 0;
+        policy.GuncelleyenUyeId = _currentUserService.UyeId ?? 0;
 
         await _context.SaveChangesAsync(cancellationToken);
 

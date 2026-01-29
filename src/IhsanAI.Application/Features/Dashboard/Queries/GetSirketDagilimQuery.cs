@@ -79,14 +79,14 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
         if (firmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
 
         // Apply filters
         if (filters.BransIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.BransId));
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.PoliceTuruId));
         if (filters.SubeIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.SubeId));
         if (filters.SirketIds.Count > 0)
             policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
@@ -102,7 +102,7 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        var toplamPrim = policeler.Sum(p => p.BrutPrim);
+        var toplamPrim = (decimal)policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
 
         var dagilim = policeler
@@ -110,7 +110,7 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
             .Select(g =>
             {
                 var sirket = sirketler.FirstOrDefault(s => s.Id == g.Key);
-                var brutPrim = g.Sum(p => p.BrutPrim);
+                var brutPrim = (decimal)g.Sum(p => p.BrutPrim);
 
                 return new SirketDagilimItem
                 {
@@ -119,7 +119,7 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
                     SirketKodu = sirket?.Kod ?? "",
                     PoliceSayisi = g.Count(),
                     ToplamBrutPrim = brutPrim,
-                    ToplamKomisyon = g.Sum(p => p.Komisyon),
+                    ToplamKomisyon = (decimal)g.Sum(p => p.Komisyon ?? 0),
                     Yuzde = toplamPrim > 0 ? Math.Round(brutPrim / toplamPrim * 100, 1) : 0
                 };
             })
@@ -130,7 +130,7 @@ public class GetSirketDagilimQueryHandler : IRequestHandler<GetSirketDagilimQuer
         return new SirketDagilimResponse
         {
             Dagilim = dagilim,
-            ToplamPrim = toplamPrim,
+            ToplamPrim = (decimal)toplamPrim,
             ToplamPolice = toplamPolice,
             Mode = DashboardMode.Onayli
         };

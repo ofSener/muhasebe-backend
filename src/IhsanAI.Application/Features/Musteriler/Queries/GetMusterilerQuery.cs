@@ -78,7 +78,7 @@ public class GetMusterilerQueryHandler : IRequestHandler<GetMusterilerQuery, Lis
                 Email = g.Key.Email,
                 EklenmeZamani = g.Key.EklenmeZamani,
                 PoliceSayisi = g.Count(x => x.police != null),
-                ToplamPrim = g.Sum(x => x.police != null ? x.police.BrutPrim : 0)
+                ToplamPrim = (decimal)g.Sum(x => x.police != null ? x.police.BrutPrim : 0)
             })
             .OrderByDescending(x => x.EklenmeZamani)
             .Take(request.Limit ?? 100)
@@ -189,7 +189,7 @@ public class GetMusteriByIdQueryHandler : IRequestHandler<GetMusteriByIdQuery, M
             GuncellenmeZamani = musteri.GuncellenmeZamani,
             GuncelleyenUyeId = musteri.GuncelleyenUyeId,
             PoliceSayisi = policeSayisi,
-            ToplamPrim = toplamPrim
+            ToplamPrim = (decimal)toplamPrim
         };
     }
 }

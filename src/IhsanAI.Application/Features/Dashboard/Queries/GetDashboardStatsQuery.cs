@@ -84,7 +84,7 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
 
         if (firmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
 
         // Mevcut dönem
@@ -114,7 +114,7 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
         var bekleyenQuery = _context.Policeler.Where(p => p.OnayDurumu == 0);
         if (firmaId.HasValue)
         {
-            bekleyenQuery = bekleyenQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            bekleyenQuery = bekleyenQuery.Where(p => p.FirmaId == firmaId.Value);
         }
         var bekleyenPoliceler = await bekleyenQuery.AsNoTracking().ToListAsync(cancellationToken);
 
@@ -132,14 +132,14 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
         {
             ToplamPoliceSayisi = toplamPoliceSayisi,
             ToplamMusteriSayisi = toplamMusteriSayisi,
-            ToplamBrutPrim = currentPoliceler.Sum(p => p.BrutPrim),
-            ToplamNetPrim = currentPoliceler.Sum(p => p.NetPrim),
-            ToplamKomisyon = currentPoliceler.Sum(p => p.Komisyon),
+            ToplamBrutPrim = (decimal)currentPoliceler.Sum(p => p.BrutPrim),
+            ToplamNetPrim = (decimal)currentPoliceler.Sum(p => p.NetPrim),
+            ToplamKomisyon = (decimal)currentPoliceler.Sum(p => p.Komisyon ?? 0),
             BekleyenPoliceSayisi = bekleyenPoliceler.Count,
-            BekleyenPrim = bekleyenPoliceler.Sum(p => p.BrutPrim),
+            BekleyenPrim = (decimal)bekleyenPoliceler.Sum(p => p.BrutPrim),
             AktifCalisanSayisi = aktifCalisanSayisi,
-            OncekiDonemBrutPrim = prevPoliceler.Sum(p => p.BrutPrim),
-            OncekiDonemKomisyon = prevPoliceler.Sum(p => p.Komisyon),
+            OncekiDonemBrutPrim = (decimal)prevPoliceler.Sum(p => p.BrutPrim),
+            OncekiDonemKomisyon = (decimal)prevPoliceler.Sum(p => p.Komisyon ?? 0),
             OncekiDonemPoliceSayisi = prevPoliceler.Count,
             Mode = DashboardMode.Onayli
         };

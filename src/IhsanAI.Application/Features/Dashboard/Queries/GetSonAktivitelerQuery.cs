@@ -78,7 +78,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
         if (firmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
 
         if (startDate.HasValue)
@@ -92,9 +92,9 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
 
         // Apply filters
         if (filters.BransIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.BransId));
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.PoliceTuruId));
         if (filters.SubeIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.SubeId));
         if (filters.SirketIds.Count > 0)
             policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
@@ -112,8 +112,8 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         // İlişkili verileri getir
         var musteriIds = policeler.Where(p => p.MusteriId.HasValue).Select(p => p.MusteriId!.Value).Distinct().ToList();
         var sirketIds = policeler.Select(p => p.SigortaSirketiId).Distinct().ToList();
-        var kullaniciIds = policeler.Select(p => p.IsOrtagiUyeId).Distinct().ToList();
-        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
+        var kullaniciIds = policeler.Select(p => p.UyeId).Distinct().ToList();
+        var bransIds = policeler.Select(p => p.PoliceTuruId).Distinct().ToList();
 
         var musteriDict = (await _context.Musteriler
             .Where(m => musteriIds.Contains(m.Id))
@@ -147,20 +147,20 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         {
             musteriDict.TryGetValue(p.MusteriId ?? 0, out var musteri);
             sirketDict.TryGetValue(p.SigortaSirketiId, out var sirket);
-            kullaniciDict.TryGetValue(p.IsOrtagiUyeId, out var kullanici);
-            bransDict.TryGetValue(p.BransId, out var brans);
+            kullaniciDict.TryGetValue(p.UyeId, out var kullanici);
+            bransDict.TryGetValue(p.PoliceTuruId, out var brans);
 
             return new SonAktiviteItem
             {
                 Id = p.Id,
-                PoliceNo = p.PoliceNo,
-                PoliceTipi = p.PoliceTipi,
+                PoliceNo = p.PoliceNumarasi,
+                PoliceTipi = p.Zeyil == 1 ? "Zeyil" : "Yeni",
                 MusteriAdi = musteri != null ? $"{musteri.Adi} {musteri.Soyadi}".Trim() : "Bilinmiyor",
                 SigortaSirketi = sirket?.Ad ?? $"Şirket #{p.SigortaSirketiId}",
                 SigortaSirketiKodu = sirket?.Kod ?? "",
-                BransAdi = brans?.Ad ?? $"Branş #{p.BransId}",
-                BrutPrim = p.BrutPrim,
-                Komisyon = p.Komisyon,
+                BransAdi = brans?.Ad ?? $"Branş #{p.PoliceTuruId}",
+                BrutPrim = (decimal)p.BrutPrim,
+                Komisyon = (decimal)(p.Komisyon ?? 0),
                 EklenmeTarihi = p.EklenmeTarihi,
                 EkleyenKullanici = kullanici != null ? $"{kullanici.Adi} {kullanici.Soyadi}".Trim() : ""
             };

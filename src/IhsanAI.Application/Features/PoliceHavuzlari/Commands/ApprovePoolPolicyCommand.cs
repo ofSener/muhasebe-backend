@@ -58,7 +58,7 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
         // Aynı poliçe zaten var mı kontrol et
         var existingPolicy = await _context.Policeler
             .FirstOrDefaultAsync(x =>
-                x.PoliceNo == poolPolicy.PoliceNo &&
+                x.PoliceNumarasi == poolPolicy.PoliceNo &&
                 x.SigortaSirketiId == poolPolicy.SigortaSirketiId &&
                 x.ZeyilNo == poolPolicy.ZeyilNo,
                 cancellationToken);
@@ -75,51 +75,34 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
         // Yeni poliçe oluştur
         var newPolicy = new Police
         {
-            PoliceTipi = poolPolicy.PoliceTipi,
-            PoliceNo = poolPolicy.PoliceNo,
-            Plaka = poolPolicy.Plaka,
-            ZeyilNo = poolPolicy.ZeyilNo,
-            YenilemeNo = poolPolicy.YenilemeNo,
             SigortaSirketiId = poolPolicy.SigortaSirketiId,
+            PoliceTuruId = poolPolicy.BransId,
+            PoliceNumarasi = poolPolicy.PoliceNo,
+            Plaka = poolPolicy.Plaka,
             TanzimTarihi = poolPolicy.TanzimTarihi,
             BaslangicTarihi = poolPolicy.BaslangicTarihi,
             BitisTarihi = poolPolicy.BitisTarihi,
-            SigortaEttirenId = poolPolicy.SigortaEttirenId,
-            BrutPrim = poolPolicy.BrutPrim,
-            NetPrim = poolPolicy.NetPrim,
-            Vergi = poolPolicy.Vergi,
-            Komisyon = poolPolicy.Komisyon,
-            BransId = poolPolicy.BransId,
-            DisPolice = poolPolicy.DisPolice,
+            BrutPrim = (float)poolPolicy.BrutPrim,
+            NetPrim = (float)poolPolicy.NetPrim,
+            SigortaliAdi = null, // Müşteri bilgisi ayrı tabloda
+            ProduktorId = poolPolicy.IsOrtagiUyeId,
+            ProduktorSubeId = poolPolicy.IsOrtagiSubeId,
+            UyeId = _currentUserService.UyeId ?? 0,
+            SubeId = poolPolicy.IsOrtagiSubeId,
+            FirmaId = poolPolicy.IsOrtagiFirmaId,
             MusteriId = poolPolicy.MusteriId,
-            PoliceTespitKaynakId = poolPolicy.PoliceTespitKaynakId,
-            IsOrtagiFirmaId = poolPolicy.IsOrtagiFirmaId,
-            IsOrtagiSubeId = poolPolicy.IsOrtagiSubeId,
-            IsOrtagiUyeId = poolPolicy.IsOrtagiUyeId,
-            IsOrtagiKomisyonOrani = poolPolicy.IsOrtagiKomisyonOrani,
-            IsOrtagiKomisyon = poolPolicy.IsOrtagiKomisyon,
-            IsOrtagiEslestirmeKriteri = poolPolicy.IsOrtagiEslestirmeKriteri,
-            IsOrtagiOnayDurumu = true,
-            KaynakDosyaId = poolPolicy.KaynakDosyaId,
-            KayitDurumu = 1, // Aktif
-            OnayDurumu = 1,  // Onaylandı
+            CepTelefonu = null,
+            GuncelleyenUyeId = _currentUserService.UyeId,
+            DisPolice = poolPolicy.DisPolice,
+            AcenteAdi = null,
+            AcenteNo = string.Empty,
             EklenmeTarihi = DateTime.UtcNow,
-            GuncelleyenKullaniciId = _currentUserService.UyeId ?? 0,
-            Kur = poolPolicy.Kur,
             Aciklama = poolPolicy.Aciklama,
-            TahsilatAciklamasi = poolPolicy.TahsilatAciklamasi,
-            PoliceKesenPersonel = poolPolicy.PoliceKesenPersonel,
-            Sube = poolPolicy.Sube,
-            YenilemeDurumu = poolPolicy.YenilemeDurumu,
-            UretimTuru = poolPolicy.UretimTuru,
-            KayitSekli = poolPolicy.KayitSekli,
-            TaksitDurumu = poolPolicy.TaksitDurumu,
-            TaksitSayisi = poolPolicy.TaksitSayisi,
-            OdemeTipi = poolPolicy.OdemeTipi,
-            MptsDurumu = poolPolicy.MptsDurumu,
-            Mutabakat = poolPolicy.Mutabakat,
-            NetKazanc = poolPolicy.NetKazanc,
-            Iskonto = poolPolicy.Iskonto
+            Komisyon = (float?)poolPolicy.Komisyon,
+            Zeyil = 0,
+            ZeyilNo = poolPolicy.ZeyilNo,
+            YenilemeDurumu = string.IsNullOrEmpty(poolPolicy.YenilemeDurumu) ? 0 : (poolPolicy.YenilemeDurumu == "Yenilenmiş" ? 1 : 0),
+            OnayDurumu = 1  // Onaylandı
         };
 
         _context.Policeler.Add(newPolicy);

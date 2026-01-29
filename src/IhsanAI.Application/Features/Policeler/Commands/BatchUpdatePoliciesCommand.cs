@@ -54,10 +54,10 @@ public class BatchUpdatePoliciesCommandHandler : IRequestHandler<BatchUpdatePoli
                 policy.MusteriId = update.MusteriId;
 
             if (update.IsOrtagiUyeId.HasValue)
-                policy.IsOrtagiUyeId = update.IsOrtagiUyeId.Value;
+                policy.UyeId = update.IsOrtagiUyeId.Value;
 
             if (update.IsOrtagiSubeId.HasValue)
-                policy.IsOrtagiSubeId = update.IsOrtagiSubeId.Value;
+                policy.SubeId = update.IsOrtagiSubeId.Value;
 
             if (update.Aciklama != null)
                 policy.Aciklama = update.Aciklama;

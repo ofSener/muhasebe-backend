@@ -68,15 +68,15 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
 
         if (request.IsOrtagiFirmaId.HasValue)
         {
-            capturedQuery = capturedQuery.Where(x => x.IsOrtagiFirmaId == request.IsOrtagiFirmaId.Value);
+            capturedQuery = capturedQuery.Where(x => x.FirmaId == request.IsOrtagiFirmaId.Value);
         }
 
         var capturedPolicies = await capturedQuery
             .Select(p => new
             {
                 p.Id,
-                p.PoliceNo,
-                p.BrutPrim,
+                PoliceNo = p.PoliceNumarasi,
+                BrutPrim = (decimal)p.BrutPrim,
                 p.SigortaSirketiId,
                 p.ZeyilNo
             })

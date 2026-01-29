@@ -79,14 +79,14 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
         if (firmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
 
         // Apply filters
         if (filters.BransIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.BransId));
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.PoliceTuruId));
         if (filters.SubeIds.Count > 0)
-            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.SubeId));
         if (filters.SirketIds.Count > 0)
             policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
@@ -96,7 +96,7 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
             .ToListAsync(cancellationToken);
 
         // Kullanıcı bilgilerini getir
-        var uyeIds = policeler.Select(p => p.IsOrtagiUyeId).Distinct().ToList();
+        var uyeIds = policeler.Select(p => p.UyeId).Distinct().ToList();
         var kullanicilar = await _context.Kullanicilar
             .Where(k => uyeIds.Contains(k.Id))
             .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId })
@@ -113,7 +113,7 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
 
         // Performans hesaplama
         var performers = policeler
-            .GroupBy(p => p.IsOrtagiUyeId)
+            .GroupBy(p => p.UyeId)
             .Select(g =>
             {
                 var kullanici = kullanicilar.FirstOrDefault(k => k.Id == g.Key);
@@ -121,8 +121,8 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
                     ? subeler.FirstOrDefault(s => s.Id == kullanici.SubeId.Value)
                     : null;
 
-                var toplamBrutPrim = g.Sum(p => p.BrutPrim);
-                var toplamKomisyon = g.Sum(p => p.IsOrtagiKomisyon);
+                var toplamBrutPrim = (decimal)g.Sum(p => p.BrutPrim);
+                var toplamKomisyon = (decimal)g.Sum(p => p.Komisyon ?? 0);
 
                 return new TopPerformerItem
                 {
@@ -142,8 +142,8 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
         return new TopPerformersResponse
         {
             Performers = performers,
-            ToplamBrutPrim = policeler.Sum(p => p.BrutPrim),
-            ToplamKomisyon = policeler.Sum(p => p.IsOrtagiKomisyon),
+            ToplamBrutPrim = (decimal)policeler.Sum(p => p.BrutPrim),
+            ToplamKomisyon = (decimal)policeler.Sum(p => p.Komisyon ?? 0),
             Mode = DashboardMode.Onayli
         };
     }

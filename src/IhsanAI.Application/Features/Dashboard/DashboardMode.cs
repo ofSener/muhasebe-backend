@@ -6,7 +6,7 @@ namespace IhsanAI.Application.Features.Dashboard;
 public enum DashboardMode
 {
     /// <summary>
-    /// Onaylı poliçeler (muhasebe_police_v2, OnayDurumu=1)
+    /// Onaylı poliçeler (muhasebe_policeler_v2, OnayDurumu=1)
     /// </summary>
     Onayli = 0,
 

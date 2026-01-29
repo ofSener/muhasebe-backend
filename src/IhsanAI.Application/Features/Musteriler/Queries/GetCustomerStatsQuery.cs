@@ -67,7 +67,7 @@ public class GetCustomerStatsQueryHandler : IRequestHandler<GetCustomerStatsQuer
 
         if (_currentUserService.FirmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == _currentUserService.FirmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == _currentUserService.FirmaId.Value);
         }
 
         var toplamPoliceSayisi = await policeQuery.CountAsync(cancellationToken);
@@ -80,7 +80,7 @@ public class GetCustomerStatsQueryHandler : IRequestHandler<GetCustomerStatsQuer
             KurumsalMusteriSayisi = kurumsalMusteriSayisi,
             BuAyYeniMusteriSayisi = buAyYeniMusteriSayisi,
             ToplamPoliceSayisi = toplamPoliceSayisi,
-            ToplamPrim = toplamPrim
+            ToplamPrim = (decimal)toplamPrim
         };
     }
 }

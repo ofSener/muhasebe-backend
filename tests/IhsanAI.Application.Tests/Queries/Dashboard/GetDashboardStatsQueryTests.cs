@@ -125,7 +125,7 @@ public class GetDashboardStatsQueryTests : TestBase
         };
 
         // Act
-        var filteredPolicies = policies.Where(p => p.IsOrtagiFirmaId == 1).ToList();
+        var filteredPolicies = policies.Where(p => p.FirmaId == 1).ToList();
 
         // Assert
         filteredPolicies.Should().HaveCount(2);
@@ -169,7 +169,7 @@ public class GetDashboardStatsQueryTests : TestBase
         // Act
         var totalBrutPrim = policies.Sum(p => p.BrutPrim);
         var totalNetPrim = policies.Sum(p => p.NetPrim);
-        var totalKomisyon = policies.Sum(p => p.Komisyon);
+        var totalKomisyon = policies.Sum(p => p.Komisyon ?? 0);
 
         // Assert
         totalBrutPrim.Should().Be(6000);
@@ -253,18 +253,18 @@ public class GetDashboardStatsQueryTests : TestBase
 
     private static Police CreateTestPolice(
         int id,
-        decimal brutPrim = 0,
-        decimal netPrim = 0,
-        decimal komisyon = 0,
-        sbyte onayDurumu = 1,
+        float brutPrim = 0,
+        float netPrim = 0,
+        float komisyon = 0,
+        int onayDurumu = 1,
         DateTime? tanzimTarihi = null,
         int firmaId = 1)
     {
         return new Police
         {
             Id = id,
-            PoliceNo = $"POL-{id:D4}",
-            PoliceTipi = "Yeni",
+            PoliceNumarasi = $"POL-{id:D4}",
+            PoliceTuruId = 1,
             BrutPrim = brutPrim,
             NetPrim = netPrim,
             Komisyon = komisyon,
@@ -272,12 +272,12 @@ public class GetDashboardStatsQueryTests : TestBase
             TanzimTarihi = tanzimTarihi ?? DateTime.Now,
             BaslangicTarihi = tanzimTarihi ?? DateTime.Now,
             BitisTarihi = (tanzimTarihi ?? DateTime.Now).AddYears(1),
-            IsOrtagiFirmaId = firmaId,
-            IsOrtagiSubeId = 1,
-            IsOrtagiUyeId = 1,
-            SigortaSirketiId = 1,
-            SigortaEttirenId = 1,
-            BransId = 1
+            FirmaId = firmaId,
+            SubeId = 1,
+            UyeId = 1,
+            ProduktorId = 1,
+            ProduktorSubeId = 1,
+            SigortaSirketiId = 1
         };
     }
 

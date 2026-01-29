@@ -108,14 +108,14 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
 
         if (firmaId.HasValue)
         {
-            query = query.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            query = query.Where(p => p.FirmaId == firmaId.Value);
         }
 
         // Apply filters
         if (filters.BransIds.Count > 0)
-            query = query.Where(p => filters.BransIds.Contains(p.BransId));
+            query = query.Where(p => filters.BransIds.Contains(p.PoliceTuruId));
         if (filters.SubeIds.Count > 0)
-            query = query.Where(p => filters.SubeIds.Contains(p.IsOrtagiSubeId));
+            query = query.Where(p => filters.SubeIds.Contains(p.SubeId));
         if (filters.SirketIds.Count > 0)
             query = query.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
@@ -127,7 +127,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
         }
 
         // Branşları sigortapoliceturleri tablosundan al (PoliceTurleri)
-        var bransIds = policeler.Select(p => p.BransId).Distinct().ToList();
+        var bransIds = policeler.Select(p => p.PoliceTuruId).Distinct().ToList();
         var policeTuruDict = (await _context.PoliceTurleri
             .Where(pt => bransIds.Contains(pt.Id))
             .Select(pt => new { pt.Id, pt.Turu })
@@ -135,22 +135,23 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
             .ToListAsync(cancellationToken))
             .ToDictionary(pt => pt.Id);
 
-        var toplamPrim = policeler.Sum(p => p.BrutPrim);
+        var toplamPrim = (decimal)policeler.Sum(p => p.BrutPrim);
         var toplamPolice = policeler.Count;
 
         var dagilim = policeler
-            .GroupBy(p => p.BransId)
+            .GroupBy(p => p.PoliceTuruId)
             .Select(g =>
             {
                 policeTuruDict.TryGetValue(g.Key, out var policeTuru);
+                var brutPrim = (decimal)g.Sum(p => p.BrutPrim);
                 return new BransDagilimItem
                 {
                     BransId = g.Key,
                     BransAdi = policeTuru?.Turu ?? $"Branş #{g.Key}",
                     PoliceSayisi = g.Count(),
-                    ToplamBrutPrim = g.Sum(p => p.BrutPrim),
-                    ToplamKomisyon = g.Sum(p => p.Komisyon),
-                    Yuzde = toplamPrim > 0 ? Math.Round(g.Sum(p => p.BrutPrim) / toplamPrim * 100, 1) : 0
+                    ToplamBrutPrim = brutPrim,
+                    ToplamKomisyon = (decimal)g.Sum(p => p.Komisyon ?? 0),
+                    Yuzde = toplamPrim > 0 ? Math.Round(brutPrim / toplamPrim * 100, 1) : 0
                 };
             })
             .OrderByDescending(x => x.ToplamBrutPrim)
@@ -159,7 +160,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
         return new BransDagilimResponse
         {
             Dagilim = dagilim,
-            ToplamPrim = toplamPrim,
+            ToplamPrim = (decimal)toplamPrim,
             ToplamPolice = toplamPolice,
             Mode = DashboardMode.Onayli
         };

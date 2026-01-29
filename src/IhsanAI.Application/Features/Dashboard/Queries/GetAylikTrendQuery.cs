@@ -72,7 +72,7 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
         var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
         if (firmaId.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.IsOrtagiFirmaId == firmaId.Value);
+            policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
 
         var policeler = await policeQuery
@@ -167,9 +167,9 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
                 Yil = ay.Year,
                 AySirasi = ay.Month,
                 PoliceSayisi = aylikPoliceler.Count,
-                BrutPrim = aylikPoliceler.Sum(p => p.BrutPrim),
-                NetPrim = aylikPoliceler.Sum(p => p.NetPrim),
-                Komisyon = aylikPoliceler.Sum(p => p.Komisyon),
+                BrutPrim = (decimal)aylikPoliceler.Sum(p => p.BrutPrim),
+                NetPrim = (decimal)aylikPoliceler.Sum(p => p.NetPrim),
+                Komisyon = (decimal)aylikPoliceler.Sum(p => p.Komisyon ?? 0),
                 YeniMusteriSayisi = aylikMusteriler
             });
         }

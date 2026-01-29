@@ -26,29 +26,28 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
-            PoliceTipi = "Yeni",
+            PoliceNumarasi = "POL-001",
+            PoliceTuruId = 1,
             ZeyilNo = 0,
             SigortaSirketiId = 1,
             TanzimTarihi = DateTime.Now,
             BaslangicTarihi = DateTime.Now,
             BitisTarihi = DateTime.Now.AddYears(1),
-            SigortaEttirenId = 1,
             BrutPrim = 1000,
             NetPrim = 900,
-            Vergi = 100,
             Komisyon = 150,
-            BransId = 1,
-            IsOrtagiFirmaId = 1,
-            IsOrtagiSubeId = 1,
-            IsOrtagiUyeId = 1,
+            FirmaId = 1,
+            SubeId = 1,
+            UyeId = 1,
+            ProduktorId = 1,
+            ProduktorSubeId = 1,
             OnayDurumu = 1
         };
 
         // Assert
-        police.PoliceNo.Should().NotBeNullOrEmpty();
+        police.PoliceNumarasi.Should().NotBeNullOrEmpty();
         police.SigortaSirketiId.Should().BeGreaterThan(0);
-        police.BransId.Should().BeGreaterThan(0);
+        police.PoliceTuruId.Should().BeGreaterThan(0);
         police.BrutPrim.Should().BeGreaterThan(0);
     }
 
@@ -59,7 +58,7 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             OnayDurumu = 0 // In pool (pending)
         };
 
@@ -74,7 +73,7 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             OnayDurumu = 1 // Approved
         };
 
@@ -92,7 +91,7 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             BaslangicTarihi = startDate,
             BitisTarihi = endDate
         };
@@ -108,7 +107,7 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             BrutPrim = 1000,
             Komisyon = 100
         };
@@ -124,7 +123,7 @@ public class CreatePolicyCommandTests : TestBase
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             BrutPrim = 1000,
             NetPrim = 900
         };
@@ -134,19 +133,18 @@ public class CreatePolicyCommandTests : TestBase
     }
 
     [Theory]
-    [InlineData(1000, 900, 100)]
-    [InlineData(2500, 2000, 500)]
-    [InlineData(500, 450, 50)]
-    public void Police_PrimCalculations_ShouldBeValid(decimal brutPrim, decimal netPrim, decimal vergi)
+    [InlineData(1000f, 900f)]
+    [InlineData(2500f, 2000f)]
+    [InlineData(500f, 450f)]
+    public void Police_PrimCalculations_ShouldBeValid(float brutPrim, float netPrim)
     {
         // Arrange
         var police = new Police
         {
             Id = 1,
-            PoliceNo = "POL-001",
+            PoliceNumarasi = "POL-001",
             BrutPrim = brutPrim,
-            NetPrim = netPrim,
-            Vergi = vergi
+            NetPrim = netPrim
         };
 
         // Assert
@@ -161,17 +159,17 @@ public class CreatePolicyCommandTests : TestBase
         // Arrange
         var policies = new List<Police>
         {
-            new Police { Id = 1, IsOrtagiFirmaId = 1, PoliceNo = "P001" },
-            new Police { Id = 2, IsOrtagiFirmaId = 2, PoliceNo = "P002" },
-            new Police { Id = 3, IsOrtagiFirmaId = 1, PoliceNo = "P003" }
+            new Police { Id = 1, FirmaId = 1, PoliceNumarasi = "P001" },
+            new Police { Id = 2, FirmaId = 2, PoliceNumarasi = "P002" },
+            new Police { Id = 3, FirmaId = 1, PoliceNumarasi = "P003" }
         };
 
         // Act
-        var filteredPolicies = policies.Where(p => p.IsOrtagiFirmaId == 1).ToList();
+        var filteredPolicies = policies.Where(p => p.FirmaId == 1).ToList();
 
         // Assert
         filteredPolicies.Should().HaveCount(2);
-        filteredPolicies.Should().AllSatisfy(p => p.IsOrtagiFirmaId.Should().Be(1));
+        filteredPolicies.Should().AllSatisfy(p => p.FirmaId.Should().Be(1));
     }
 
     [Fact]
@@ -180,13 +178,13 @@ public class CreatePolicyCommandTests : TestBase
         // Arrange
         var policies = new List<Police>
         {
-            new Police { Id = 1, IsOrtagiSubeId = 1, PoliceNo = "P001" },
-            new Police { Id = 2, IsOrtagiSubeId = 2, PoliceNo = "P002" },
-            new Police { Id = 3, IsOrtagiSubeId = 1, PoliceNo = "P003" }
+            new Police { Id = 1, SubeId = 1, PoliceNumarasi = "P001" },
+            new Police { Id = 2, SubeId = 2, PoliceNumarasi = "P002" },
+            new Police { Id = 3, SubeId = 1, PoliceNumarasi = "P003" }
         };
 
         // Act
-        var filteredPolicies = policies.Where(p => p.IsOrtagiSubeId == 1).ToList();
+        var filteredPolicies = policies.Where(p => p.SubeId == 1).ToList();
 
         // Assert
         filteredPolicies.Should().HaveCount(2);
@@ -201,9 +199,9 @@ public class CreatePolicyCommandTests : TestBase
 
         var policies = new List<Police>
         {
-            new Police { Id = 1, TanzimTarihi = new DateTime(2024, 6, 15), PoliceNo = "P001" },
-            new Police { Id = 2, TanzimTarihi = new DateTime(2023, 6, 15), PoliceNo = "P002" }, // Out of range
-            new Police { Id = 3, TanzimTarihi = new DateTime(2024, 3, 15), PoliceNo = "P003" }
+            new Police { Id = 1, TanzimTarihi = new DateTime(2024, 6, 15), PoliceNumarasi = "P001" },
+            new Police { Id = 2, TanzimTarihi = new DateTime(2023, 6, 15), PoliceNumarasi = "P002" }, // Out of range
+            new Police { Id = 3, TanzimTarihi = new DateTime(2024, 3, 15), PoliceNumarasi = "P003" }
         };
 
         // Act
@@ -221,9 +219,9 @@ public class CreatePolicyCommandTests : TestBase
         // Arrange
         var policies = new List<Police>
         {
-            new Police { Id = 1, BrutPrim = 1000, PoliceNo = "P001" },
-            new Police { Id = 2, BrutPrim = 2000, PoliceNo = "P002" },
-            new Police { Id = 3, BrutPrim = 3000, PoliceNo = "P003" }
+            new Police { Id = 1, BrutPrim = 1000, PoliceNumarasi = "P001" },
+            new Police { Id = 2, BrutPrim = 2000, PoliceNumarasi = "P002" },
+            new Police { Id = 3, BrutPrim = 3000, PoliceNumarasi = "P003" }
         };
 
         // Act
@@ -239,13 +237,13 @@ public class CreatePolicyCommandTests : TestBase
         // Arrange
         var policies = new List<Police>
         {
-            new Police { Id = 1, Komisyon = 100, PoliceNo = "P001" },
-            new Police { Id = 2, Komisyon = 200, PoliceNo = "P002" },
-            new Police { Id = 3, Komisyon = 300, PoliceNo = "P003" }
+            new Police { Id = 1, Komisyon = 100, PoliceNumarasi = "P001" },
+            new Police { Id = 2, Komisyon = 200, PoliceNumarasi = "P002" },
+            new Police { Id = 3, Komisyon = 300, PoliceNumarasi = "P003" }
         };
 
         // Act
-        var totalKomisyon = policies.Sum(p => p.Komisyon);
+        var totalKomisyon = policies.Sum(p => p.Komisyon ?? 0);
 
         // Assert
         totalKomisyon.Should().Be(600);
@@ -257,10 +255,10 @@ public class CreatePolicyCommandTests : TestBase
         // Arrange
         var policies = new List<Police>
         {
-            new Police { Id = 1, OnayDurumu = 1, PoliceNo = "P001" }, // Approved
-            new Police { Id = 2, OnayDurumu = 0, PoliceNo = "P002" }, // Pending
-            new Police { Id = 3, OnayDurumu = 1, PoliceNo = "P003" }, // Approved
-            new Police { Id = 4, OnayDurumu = 2, PoliceNo = "P004" }  // Rejected
+            new Police { Id = 1, OnayDurumu = 1, PoliceNumarasi = "P001" }, // Approved
+            new Police { Id = 2, OnayDurumu = 0, PoliceNumarasi = "P002" }, // Pending
+            new Police { Id = 3, OnayDurumu = 1, PoliceNumarasi = "P003" }, // Approved
+            new Police { Id = 4, OnayDurumu = 2, PoliceNumarasi = "P004" }  // Rejected
         };
 
         // Act
