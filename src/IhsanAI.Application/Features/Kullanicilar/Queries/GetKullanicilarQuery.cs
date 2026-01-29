@@ -168,6 +168,7 @@ public record AktifKullaniciDto
     public string? Soyadi { get; init; }
     public string? Email { get; init; }
     public string? GsmNo { get; init; }
+    public int? SubeId { get; init; }
 }
 
 public record GetAktifKullanicilarQuery(int? FirmaId = null, int? Limit = null) : IRequest<List<AktifKullaniciDto>>;
@@ -200,7 +201,8 @@ public class GetAktifKullanicilarQueryHandler : IRequestHandler<GetAktifKullanic
                 Adi = x.Adi,
                 Soyadi = x.Soyadi,
                 Email = x.Email,
-                GsmNo = x.GsmNo
+                GsmNo = x.GsmNo,
+                SubeId = x.SubeId
             });
 
         if (request.Limit.HasValue)

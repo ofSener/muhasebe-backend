@@ -13,7 +13,11 @@ namespace IhsanAI.Application.Features.Auth.Commands;
 /// Refresh token ile yeni access token almak için command.
 /// HttpOnly cookie'den gelen refresh token ile çalışır.
 /// </summary>
-public record RefreshTokenCommand(string RefreshToken) : IRequest<RefreshTokenResponse>;
+public record RefreshTokenCommand(
+    string RefreshToken,
+    string? IpAddress = null,
+    string? DeviceInfo = null
+) : IRequest<RefreshTokenResponse>;
 
 public record RefreshTokenResponse
 {
@@ -51,21 +55,40 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             };
         }
 
-        // Refresh token ile kullanıcıyı bul
-        var kullanici = await _context.Kullanicilar
-            .FirstOrDefaultAsync(k =>
-                k.RefreshToken == request.RefreshToken &&
-                k.RefreshTokenExpiry > _dateTimeService.Now &&
-                k.Onay == 1 &&
-                (k.BitisTarihi == null || k.BitisTarihi > _dateTimeService.Now),
+        // Refresh token ile token kaydını bul (Muhasebe özel token tablosundan)
+        var tokenRecord = await _context.MuhasebeKullaniciTokens
+            .Include(t => t.Kullanici)
+            .FirstOrDefaultAsync(t =>
+                t.RefreshToken == request.RefreshToken &&
+                t.RefreshTokenExpiry > _dateTimeService.Now &&
+                t.IsActive &&
+                !t.IsRevoked,
                 cancellationToken);
 
-        if (kullanici == null)
+        if (tokenRecord == null || tokenRecord.Kullanici == null)
         {
             return new RefreshTokenResponse
             {
                 Success = false,
                 Message = "Geçersiz veya süresi dolmuş refresh token"
+            };
+        }
+
+        var kullanici = tokenRecord.Kullanici;
+
+        // Kullanıcı hesabı aktif mi kontrol et
+        if (kullanici.Onay != 1 || (kullanici.BitisTarihi.HasValue && kullanici.BitisTarihi <= _dateTimeService.Now))
+        {
+            // Token'ı iptal et
+            tokenRecord.IsRevoked = true;
+            tokenRecord.RevokedAt = _dateTimeService.Now;
+            tokenRecord.RevokeReason = "Kullanıcı hesabı devre dışı";
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new RefreshTokenResponse
+            {
+                Success = false,
+                Message = "Kullanıcı hesabı aktif değil"
             };
         }
 
@@ -87,15 +110,49 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
 
         var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
 
-        // Yeni refresh token oluştur (rotation)
+        // OPTIMIZASYON: Eğer token çok yeni oluşturulduysa (son 30 saniye), yeni token oluşturma
+        // Sadece LastUsedAt'ı güncelle ve aynı token'ı dön (gereksiz kayıt şişmesini önler)
+        var tokenAge = _dateTimeService.Now - tokenRecord.CreatedAt;
+        if (tokenAge.TotalSeconds < 30)
+        {
+            // Token henüz çok yeni, aynı token'ı kullan
+            tokenRecord.LastUsedAt = _dateTimeService.Now;
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new RefreshTokenResponse
+            {
+                Success = true,
+                Token = tokenRecord.AccessToken,
+                RefreshToken = tokenRecord.RefreshToken,
+                ExpiresIn = expirationMinutes * 60
+            };
+        }
+
+        // Token rotation (güvenlik için eski token iptal edilip yeni oluşturulur)
         var newRefreshToken = GenerateRefreshToken();
 
-        // Kullanıcıyı güncelle
-        kullanici.Token = token;
-        kullanici.TokenExpiry = _dateTimeService.Now.AddMinutes(expirationMinutes);
-        kullanici.RefreshToken = newRefreshToken;
-        kullanici.RefreshTokenExpiry = _dateTimeService.Now.AddDays(7);
+        // OPTIMIZASYON: Eski token'ı database'den tamamen sil (revoke yerine DELETE)
+        // İptal edilmiş token'ların kayıt şişmesini önler
+        _context.MuhasebeKullaniciTokens.Remove(tokenRecord);
 
+        // Yeni token kaydı oluştur
+        var newTokenRecord = new Domain.Entities.MuhasebeKullaniciToken
+        {
+            KullaniciId = kullanici.Id,
+            AccessToken = token,
+            AccessTokenExpiry = _dateTimeService.Now.AddMinutes(expirationMinutes),
+            RefreshToken = newRefreshToken,
+            RefreshTokenExpiry = _dateTimeService.Now.AddDays(7),
+            // Eğer yeni bilgi gelirse kullan, yoksa eskiyi koru
+            DeviceInfo = request.DeviceInfo ?? tokenRecord.DeviceInfo,
+            IpAddress = request.IpAddress ?? tokenRecord.IpAddress,
+            IsActive = true,
+            IsRevoked = false,
+            CreatedAt = _dateTimeService.Now,
+            LastUsedAt = _dateTimeService.Now
+        };
+
+        _context.MuhasebeKullaniciTokens.Add(newTokenRecord);
         await _context.SaveChangesAsync(cancellationToken);
 
         return new RefreshTokenResponse

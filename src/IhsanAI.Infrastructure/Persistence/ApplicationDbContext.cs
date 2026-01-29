@@ -32,6 +32,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<FirmaDriveToken> FirmaDriveTokens => Set<FirmaDriveToken>();
     public DbSet<DriveUploadLog> DriveUploadLogs => Set<DriveUploadLog>();
     public DbSet<Brans> Branslar => Set<Brans>();
+    public DbSet<MuhasebeKullaniciToken> MuhasebeKullaniciTokens => Set<MuhasebeKullaniciToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

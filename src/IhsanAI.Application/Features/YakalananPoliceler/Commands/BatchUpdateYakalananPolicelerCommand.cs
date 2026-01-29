@@ -9,11 +9,11 @@ public record YakalananPoliceChangesDto
 {
     public string? PolicyNo { get; init; }
     public int? Customer { get; init; }
-    public string? Type { get; init; }
+    public int? TypeId { get; init; }
     public float? NetPremium { get; init; }
     public float? GrossPremium { get; init; }
-    public string? Producer { get; init; }
-    public string? Branch { get; init; }
+    public int? ProducerId { get; init; }
+    public int? BranchId { get; init; }
     public string? Date { get; init; }
 }
 
@@ -55,30 +55,6 @@ public class BatchUpdateYakalananPolicelerCommandHandler
             };
         }
 
-        // Lookup dictionary'leri hazırla
-        var kullanicilar = await _context.Kullanicilar
-            .AsNoTracking()
-            .ToDictionaryAsync(
-                k => $"{k.Adi} {k.Soyadi}".Trim(),
-                k => k.Id,
-                cancellationToken);
-
-        var subelerList = await _context.Subeler
-            .AsNoTracking()
-            .Where(s => s.SubeAdi != null)
-            .ToListAsync(cancellationToken);
-        var subeler = subelerList
-            .Where(s => !string.IsNullOrEmpty(s.SubeAdi))
-            .ToDictionary(s => s.SubeAdi!, s => s.Id);
-
-        var policeTurleriList = await _context.PoliceTurleri
-            .AsNoTracking()
-            .Where(p => p.Turu != null)
-            .ToListAsync(cancellationToken);
-        var policeTurleri = policeTurleriList
-            .Where(p => !string.IsNullOrEmpty(p.Turu))
-            .ToDictionary(p => p.Turu!, p => p.Id);
-
         // Güncellenecek kayıtları çek
         var ids = request.Updates.Select(u => u.PolicyId).ToList();
         var policies = await _context.YakalananPoliceler
@@ -105,31 +81,22 @@ public class BatchUpdateYakalananPolicelerCommandHandler
 
             var changes = update.Changes;
 
-            // Producer (isim -> ID)
-            if (!string.IsNullOrEmpty(changes.Producer))
+            // Producer ID
+            if (changes.ProducerId.HasValue)
             {
-                if (kullanicilar.TryGetValue(changes.Producer, out var produktorId))
-                {
-                    policy.ProduktorId = produktorId;
-                }
+                policy.ProduktorId = changes.ProducerId.Value;
             }
 
-            // Branch (isim -> ID)
-            if (!string.IsNullOrEmpty(changes.Branch))
+            // Branch ID
+            if (changes.BranchId.HasValue)
             {
-                if (subeler.TryGetValue(changes.Branch, out var subeId))
-                {
-                    policy.ProduktorSubeId = subeId;
-                }
+                policy.ProduktorSubeId = changes.BranchId.Value;
             }
 
-            // Type (isim -> ID)
-            if (!string.IsNullOrEmpty(changes.Type))
+            // Type ID
+            if (changes.TypeId.HasValue)
             {
-                if (policeTurleri.TryGetValue(changes.Type, out var turId))
-                {
-                    policy.PoliceTuru = turId;
-                }
+                policy.PoliceTuru = changes.TypeId.Value;
             }
 
             // NetPremium
