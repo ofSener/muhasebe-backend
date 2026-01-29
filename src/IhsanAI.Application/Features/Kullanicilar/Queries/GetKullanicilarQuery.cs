@@ -168,6 +168,8 @@ public record AktifKullaniciDto
     public string? Soyadi { get; init; }
     public string? Email { get; init; }
     public string? GsmNo { get; init; }
+    public int? SubeId { get; init; }
+    public string? SubeAdi { get; init; }
 }
 
 public record GetAktifKullanicilarQuery(int? FirmaId = null, int? Limit = null) : IRequest<List<AktifKullaniciDto>>;
@@ -191,24 +193,28 @@ public class GetAktifKullanicilarQueryHandler : IRequestHandler<GetAktifKullanic
             query = query.Where(x => x.FirmaId == request.FirmaId.Value);
         }
 
-        var result = query
-            .OrderBy(x => x.Adi)
-            .ThenBy(x => x.Soyadi)
-            .Select(x => new AktifKullaniciDto
+        var resultQuery =
+            from k in query
+            join s in _context.Subeler on k.SubeId equals s.Id into subeler
+            from sube in subeler.DefaultIfEmpty()
+            orderby k.Adi, k.Soyadi
+            select new AktifKullaniciDto
             {
-                Id = x.Id,
-                Adi = x.Adi,
-                Soyadi = x.Soyadi,
-                Email = x.Email,
-                GsmNo = x.GsmNo
-            });
+                Id = k.Id,
+                Adi = k.Adi,
+                Soyadi = k.Soyadi,
+                Email = k.Email,
+                GsmNo = k.GsmNo,
+                SubeId = k.SubeId,
+                SubeAdi = sube != null ? sube.SubeAdi : null
+            };
 
         if (request.Limit.HasValue)
         {
-            result = result.Take(request.Limit.Value);
+            resultQuery = resultQuery.Take(request.Limit.Value);
         }
 
-        return await result
+        return await resultQuery
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
