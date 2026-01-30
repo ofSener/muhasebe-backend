@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -13,6 +14,14 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddEndpointsApiExplorer();
+
+        // Büyük dosya yüklemeleri için FormOptions (50MB)
+        services.Configure<FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = 50 * 1024 * 1024; // 50MB
+            options.ValueLengthLimit = 50 * 1024 * 1024;
+            options.MemoryBufferThreshold = 50 * 1024 * 1024;
+        });
 
         // Configure Swagger
         services.AddSwaggerGen(c =>

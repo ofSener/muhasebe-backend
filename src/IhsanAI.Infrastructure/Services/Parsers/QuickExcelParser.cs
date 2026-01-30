@@ -35,7 +35,7 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// </summary>
 public class QuickExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 3;
+    public override int SigortaSirketiId => 110;
     public override string SirketAdi => "Quick Sigorta";
     public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck", "police_listesi", "policelistesi" };
 
@@ -119,8 +119,12 @@ public class QuickExcelParser : BaseExcelParser
                 continue;
 
             var zeyilNo = GetStringValue(row, "ZeyilNo", "ZEYILNO", "ZEYİLNO", "SIRA_NO", "EKBELGE_NO");
-            var urunAdi = GetStringValue(row, "UrunAd", "URUNAD", "ÜRÜNAD", "URUN_AD", "MODELLEME_URUN_AD");
+            var urunAdi = GetStringValue(row, "UrunAd", "URUNAD", "ÜRÜNAD", "URUN_AD", "MODELLEME_URUN_AD", "URUN_ADI", "ÜRÜN_ADI", "Ürün", "URUN");
             var isZeyil = IsZeyilPolicy(zeyilNo);
+
+            // Debug: BransId tespiti
+            var detectedBransId = DetectBransIdFromUrunAdi(urunAdi, isZeyil);
+            System.Diagnostics.Debug.WriteLine($"[QuickParser] Row {rowNumber}: UrunAdi='{urunAdi}', DetectedBransId={detectedBransId}");
 
             // Sigortalı bilgilerini lookup'tan al
             var lookupKey = $"{policeNo}_{GetZeyilNo(zeyilNo)}";
@@ -154,7 +158,7 @@ public class QuickExcelParser : BaseExcelParser
                 ZeyilNo = zeyilNo,
                 ZeyilTipKodu = GetStringValue(row, "ZeyilTipKodu", "ZEYILTIPKODU", "ZEYİLTİPKODU", "EKBELGE_KOD"),
                 Brans = urunAdi,
-                BransId = DetectBransIdFromUrunAdi(urunAdi, isZeyil),
+                BransId = detectedBransId,
                 PoliceTipi = GetPoliceTipiFromPrim(row),
 
                 // Tarihler

@@ -272,14 +272,9 @@ public abstract class BaseExcelParser : IExcelParser
     }
 
     /// <summary>
-    /// Ürün adından BransId çıkarır
-    /// Quick Sigorta UrunAd örnekleri:
-    /// - TRAFİK SİGORTASI
-    /// - GENİŞLETİLMİŞ KASKO SİGORTASI
-    /// - ZORUNLU DEPREM SİGORTASI
-    /// - SEYAHAT SAĞLIK
-    /// - KASKONOMİQ KASKO
-    /// - QUICK TAMAMLAYICI SAGLIK
+    /// Ürün adından BransId (PoliceTuruId) çıkarır
+    /// sigortapoliceturleri tablosundaki ID'lerle eşleşir
+    /// Kullanılmayan ID'ler: 11, 13, 14, 18, 22, 23
     /// </summary>
     protected static int? DetectBransIdFromUrunAdi(string? urunAdi, bool isZeyil = false)
     {
@@ -293,111 +288,102 @@ public abstract class BaseExcelParser : IExcelParser
             .Replace("Ö", "O")
             .Replace("Ç", "C");
 
-        // Trafik kontrolü - "TRAFİK SİGORTASI", "ZMSS", "ZORUNLU MALİ"
+        // Trafik (ID: 0) - zeyil olsa da aynı ID
         if (value.Contains("TRAFIK") || value.Contains("TRAFFIC") || value.Contains("ZMSS") || value.Contains("ZORUNLU MALI"))
-        {
-            return isZeyil ? 13 : 0; // 13: Trafik Zeyil, 0: Trafik
-        }
+            return 0;
 
-        // Kasko kontrolü - "GENİŞLETİLMİŞ KASKO SİGORTASI", "KASKONOMİQ KASKO"
+        // Kasko (ID: 1) - zeyil olsa da aynı ID
         if (value.Contains("KASKO"))
-        {
-            return isZeyil ? 14 : 1; // 14: Kasko Zeyil, 1: Kasko
-        }
+            return 1;
 
-        // DASK - "ZORUNLU DEPREM SİGORTASI"
+        // DASK (ID: 2)
         if (value.Contains("DASK") || value.Contains("DEPREM"))
             return 2;
 
         // Sağlık türleri (spesifikten genele)
-        // "SEYAHAT SAĞLIK"
         if (value.Contains("SEYAHAT"))
             return 8; // Seyahat Sağlık
-        // "QUICK TAMAMLAYICI SAGLIK"
-        if (value.Contains("TAMAMLAYICI"))
-            return 16; // Tamamlayıcı Sağlık
         if (value.Contains("YABANCI") && value.Contains("SAGLIK"))
             return 15; // Yabancı Sağlık
-        if (value.Contains("AYAKTA"))
-            return 23; // Sağlık Ayakta
-        if (value.Contains("YATARAK"))
-            return 22; // Sağlık Yatarak
+        // Ayakta, Yatarak ve Tamamlayıcı -> 16 (Tamamlayıcı Sağlık)
+        if (value.Contains("TAMAMLAYICI") || value.Contains("AYAKTA") || value.Contains("YATARAK"))
+            return 16;
         if (value.Contains("SAGLIK"))
             return 7; // Genel Sağlık
 
-        // Ferdi Kaza
+        // Ferdi Kaza (ID: 3)
         if (value.Contains("FERDI KAZA") || value.Contains("FERDI_KAZA") || value.Contains("FK"))
             return 3;
 
-        // Koltuk
+        // Koltuk (ID: 4)
         if (value.Contains("KOLTUK"))
             return 4;
 
-        // Konut
+        // Konut (ID: 5)
         if (value.Contains("KONUT") || value.Contains("MESKEN"))
             return 5;
 
-        // Nakliyat
+        // Nakliyat (ID: 6)
         if (value.Contains("NAKLIYAT") || value.Contains("NAKLIYE") || value.Contains("EMTEA"))
             return 6;
 
-        // İşyeri
+        // İşyeri (ID: 9)
         if (value.Contains("ISYERI") || value.Contains("IS YERI") || value.Contains("TIBBI MALP"))
             return 9;
 
-        // ZKTM (Zorunlu Karayolu Taşımacılık Mali)
+        // ZKTM (ID: 10)
         if (value.Contains("ZKTM") || value.Contains("KARAYOLU TASIMACI"))
             return 10;
 
-        // IMM (İhtiyari Mali Mesuliyet)
+        // IMM (ID: 12)
         if (value.Contains("IMM") || value.Contains("IHTIYARI MALI"))
             return 12;
 
-        // Makbuz
+        // Makbuz (ID: 17)
         if (value.Contains("MAKBUZ"))
             return 17;
 
-        // Doğal Koruma
+        // Doğal Koruma (ID: 19)
         if (value.Contains("DOGAL KORUMA") || value.Contains("DOGAL AFET"))
             return 19;
 
-        // Tarım
+        // Tarım (ID: 20)
         if (value.Contains("TARIM") || value.Contains("ZIRAI") || value.Contains("HAYVAN"))
             return 20;
 
-        // Yangın
+        // Yangın (ID: 21)
         if (value.Contains("YANGIN"))
             return 21;
 
-        // Hukuksal Koruma
+        // Hukuksal Koruma (ID: 24)
         if (value.Contains("HUKUKSAL") || value.Contains("HUKUKI"))
             return 24;
 
-        // Tekne
+        // Tekne (ID: 25)
         if (value.Contains("TEKNE") || value.Contains("YATA") || value.Contains("DENIZ"))
             return 25;
 
-        // Hayat
+        // Hayat (ID: 26)
         if (value.Contains("HAYAT") || value.Contains("YASAM"))
             return 26;
 
-        // Yeşil Kart
+        // Yeşil Kart (ID: 27)
         if (value.Contains("YESIL KART") || value.Contains("GREEN CARD"))
             return 27;
 
-        // Mühendislik
+        // Mühendislik (ID: 28)
         if (value.Contains("MUHENDISLIK") || value.Contains("INSAAT") || value.Contains("MAKINE KIRILMA"))
             return 28;
 
-        // Sorumluluk
+        // Sorumluluk (ID: 29)
         if (value.Contains("SORUMLULUK") || value.Contains("MESLEK") || value.Contains("URUN SORUMLUL"))
             return 29;
 
-        // Yol Destek
+        // Yol Destek (ID: 30)
         if (value.Contains("YOL DESTEK") || value.Contains("YARDIM"))
             return 30;
 
-        // Bilinmiyor
+        // Belli Değil (ID: 255)
         return 255;
     }
 
