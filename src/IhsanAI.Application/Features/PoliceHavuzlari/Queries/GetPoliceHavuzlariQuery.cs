@@ -63,8 +63,31 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Yakalanan poliçeleri çek (karşılaştırma için)
-        var capturedQuery = _context.YakalananPoliceler.AsQueryable();
+        // Eğer havuzda hiç kayıt yoksa, yakalanan poliçeleri çekmeye gerek yok
+        if (!poolItems.Any())
+        {
+            return new PoliceHavuzListDto
+            {
+                Items = new List<PoliceHavuzItemDto>(),
+                TotalCount = 0,
+                MatchedCount = 0,
+                UnmatchedCount = 0,
+                DifferenceCount = 0,
+                OnlyPoolCount = 0,
+                TotalBrutPrim = 0,
+                CurrentPage = request.Page,
+                PageSize = request.PageSize,
+                TotalPages = 0
+            };
+        }
+
+        // Performans optimizasyonu: Sadece havuzdaki poliçe numaralarına göre yakalanan poliçeleri çek
+        var poolPoliceNos = poolItems.Select(p => p.PoliceNo).Distinct().ToList();
+        var poolSigortaSirketIds = poolItems.Select(p => p.SigortaSirketiId).Distinct().ToList();
+
+        var capturedQuery = _context.YakalananPoliceler
+            .Where(x => poolPoliceNos.Contains(x.PoliceNumarasi) &&
+                        poolSigortaSirketIds.Contains(x.SigortaSirketi));
 
         if (request.IsOrtagiFirmaId.HasValue)
         {
