@@ -68,13 +68,13 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
 
         if (request.IsOrtagiFirmaId.HasValue)
         {
-            capturedQuery = capturedQuery.Where(x => x.FirmaID == request.IsOrtagiFirmaId.Value);
+            capturedQuery = capturedQuery.Where(x => x.FirmaId == request.IsOrtagiFirmaId.Value);
         }
 
         var capturedPolicies = await capturedQuery
             .Select(p => new
             {
-                p.ID,
+                p.Id,
                 PoliceNo = p.PoliceNumarasi,
                 BrutPrim = (decimal)p.BrutPrim,
                 p.SigortaSirketi,
@@ -165,7 +165,7 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
                 EslesmeDurumu = eslesmeDurumu,
                 YakalananPrim = match?.BrutPrim,
                 PrimFarki = primFarki,
-                YakalananPoliceId = match?.ID
+                YakalananPoliceId = match?.Id
             });
         }
 
