@@ -175,14 +175,30 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
         // Status filtresi uygula
         if (!string.IsNullOrWhiteSpace(request.Status) && request.Status != "all")
         {
-            items = request.Status switch
+            // Virgülle ayrılmış multiple status desteği
+            var statusList = request.Status.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(s => s.Trim())
+                                           .ToList();
+
+            if (statusList.Count > 0)
             {
-                "matched" => items.Where(x => x.EslesmeDurumu == "ESLESTI").ToList(),
-                "unmatched" => items.Where(x => x.EslesmeDurumu == "AKTARIMDA").ToList(),
-                "difference" => items.Where(x => x.EslesmeDurumu == "FARK_VAR").ToList(),
-                "only-pool" => items.Where(x => x.EslesmeDurumu == "AKTARIMDA").ToList(),
-                _ => items
-            };
+                items = items.Where(x =>
+                {
+                    foreach (var status in statusList)
+                    {
+                        var match = status switch
+                        {
+                            "matched" => x.EslesmeDurumu == "ESLESTI",
+                            "unmatched" => x.EslesmeDurumu == "AKTARIMDA",
+                            "difference" => x.EslesmeDurumu == "FARK_VAR",
+                            "only-pool" => x.EslesmeDurumu == "AKTARIMDA",
+                            _ => false
+                        };
+                        if (match) return true;
+                    }
+                    return false;
+                }).ToList();
+            }
         }
 
         // Toplam sayı (filtreleme sonrası)
