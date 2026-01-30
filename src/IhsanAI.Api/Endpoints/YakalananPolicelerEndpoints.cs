@@ -44,8 +44,8 @@ public static class YakalananPolicelerEndpoints
 
         group.MapGet("/not-in-pool", async (
             int? firmaId,
-            int page,
-            int pageSize,
+            int? page,
+            int? pageSize,
             string? search,
             int? bransId,
             int? sigortaSirketiId,
@@ -54,8 +54,8 @@ public static class YakalananPolicelerEndpoints
             var query = new GetYakalananNotInPoolQuery
             {
                 FirmaId = firmaId,
-                Page = page == 0 ? 1 : page,
-                PageSize = pageSize == 0 ? 20 : pageSize,
+                Page = page ?? 1,
+                PageSize = pageSize ?? 20,
                 Search = search,
                 BransId = bransId,
                 SigortaSirketiId = sigortaSirketiId
