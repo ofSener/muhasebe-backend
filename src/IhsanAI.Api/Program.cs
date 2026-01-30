@@ -36,6 +36,12 @@ Console.WriteLine($"[ENV] GoogleDrive__ClientId loaded: {!string.IsNullOrEmpty(c
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Kestrel - Büyük dosya yüklemeleri için limit (50MB)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 50 * 1024 * 1024; // 50MB
+});
+
 // Add environment variables to configuration
 builder.Configuration.AddEnvironmentVariables();
 

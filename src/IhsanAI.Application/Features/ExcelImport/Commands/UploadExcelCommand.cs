@@ -27,18 +27,18 @@ public class UploadExcelCommandHandler : IRequestHandler<UploadExcelCommand, Exc
             throw new ArgumentException("Dosya seçilmedi.");
         }
 
-        var allowedExtensions = new[] { ".xlsx", ".xls", ".csv" };
+        var allowedExtensions = new[] { ".xlsx", ".xls", ".csv", ".xml" };
         var extension = Path.GetExtension(request.File.FileName).ToLowerInvariant();
 
         if (!allowedExtensions.Contains(extension))
         {
-            throw new ArgumentException("Desteklenmeyen dosya formatı. Sadece Excel (.xlsx, .xls) ve CSV dosyaları yüklenebilir.");
+            throw new ArgumentException("Desteklenmeyen dosya formatı. Sadece Excel (.xlsx, .xls), CSV ve XML dosyaları yüklenebilir.");
         }
 
-        // Dosya boyutu kontrolü (10MB max)
-        if (request.File.Length > 10 * 1024 * 1024)
+        // Dosya boyutu kontrolü (50MB max)
+        if (request.File.Length > 50 * 1024 * 1024)
         {
-            throw new ArgumentException("Dosya boyutu 10MB'ı aşamaz.");
+            throw new ArgumentException("Dosya boyutu 50MB'ı aşamaz.");
         }
 
         using var stream = request.File.OpenReadStream();

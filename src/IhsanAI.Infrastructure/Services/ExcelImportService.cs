@@ -19,6 +19,7 @@ public class ExcelImportService : IExcelImportService
     private readonly IMemoryCache _cache;
     private readonly ILogger<ExcelImportService> _logger;
     private readonly List<IExcelParser> _parsers;
+    private readonly QuickXmlParser _quickXmlParser;
 
     public ExcelImportService(
         IApplicationDbContext context,
@@ -46,6 +47,9 @@ public class ExcelImportService : IExcelImportService
             new AkSigortaSkayParser()
         };
 
+        // XML Parser
+        _quickXmlParser = new QuickXmlParser();
+
         // EPPlus lisans ayarı (non-commercial)
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
@@ -55,10 +59,18 @@ public class ExcelImportService : IExcelImportService
 
     public async Task<ExcelImportPreviewDto> ParseExcelAsync(Stream fileStream, string fileName, int? sigortaSirketiId = null)
     {
-        _logger.LogInformation("Excel parsing başlatılıyor: {FileName}", fileName);
+        _logger.LogInformation("Dosya parsing başlatılıyor: {FileName}", fileName);
 
         try
         {
+            var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+            // XML dosyası ise XML parser kullan
+            if (extension == ".xml")
+            {
+                return await ParseXmlFileAsync(fileStream, fileName, sigortaSirketiId);
+            }
+
             // Parser seç
             IExcelParser? parser = null;
 
@@ -304,15 +316,24 @@ public class ExcelImportService : IExcelImportService
             var sirket = await _context.SigortaSirketleri
                 .FirstOrDefaultAsync(s => s.Ad.ToLower().Contains(searchName));
 
+            // Parser'a göre not belirle
+            string? notes = null;
+            if (parser.SirketAdi.Contains("Sompo"))
+            {
+                notes = "Header 2. satırda, ilk satır firma bilgisi";
+            }
+            else if (parser.SirketAdi.Contains("Quick"))
+            {
+                notes = "Excel (.xlsx, .xls) ve XML formatları desteklenir";
+            }
+
             formats.Add(new SupportedFormatDto
             {
                 SigortaSirketiId = sirket?.Id ?? parser.SigortaSirketiId,
                 SigortaSirketiAdi = sirket?.Ad ?? parser.SirketAdi,
                 FormatDescription = $"{parser.SirketAdi} Excel formatı",
                 RequiredColumns = new List<string> { "Poliçe No", "Brüt Prim", "Başlangıç Tarihi" },
-                Notes = parser.SirketAdi.Contains("Sompo")
-                    ? "Header 2. satırda, ilk satır firma bilgisi"
-                    : null
+                Notes = notes
             });
         }
 
@@ -331,6 +352,13 @@ public class ExcelImportService : IExcelImportService
     public int? DetectSigortaSirketiFromFileName(string fileName)
     {
         var fileNameLower = fileName.ToLowerInvariant();
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+        // XML dosyası için Quick XML parser'ı kontrol et
+        if (extension == ".xml" && _quickXmlParser.CanParseXml(fileName))
+        {
+            return _quickXmlParser.SigortaSirketiId;
+        }
 
         foreach (var parser in _parsers)
         {
@@ -430,6 +458,87 @@ public class ExcelImportService : IExcelImportService
     }
 
     #region Private Methods
+
+    /// <summary>
+    /// XML dosyasını parse eder (Quick Sigorta XML formatı)
+    /// </summary>
+    private async Task<ExcelImportPreviewDto> ParseXmlFileAsync(Stream fileStream, string fileName, int? sigortaSirketiId)
+    {
+        _logger.LogInformation("XML parsing başlatılıyor: {FileName}", fileName);
+
+        try
+        {
+            // Quick XML parser'ı kullan
+            if (_quickXmlParser.CanParseXml(fileName) || sigortaSirketiId == _quickXmlParser.SigortaSirketiId)
+            {
+                var parsedRows = _quickXmlParser.ParseXml(fileStream);
+
+                if (parsedRows.Count == 0)
+                {
+                    return new ExcelImportPreviewDto
+                    {
+                        TotalRows = 0,
+                        ValidRows = 0,
+                        InvalidRows = 0,
+                        Rows = new List<ExcelImportRowDto>(),
+                        DetectedFormat = _quickXmlParser.SirketAdi
+                    };
+                }
+
+                // Müşteri ve branş eşleştirmelerini yap
+                await EnrichRowsWithLookupDataAsync(parsedRows);
+
+                // Session oluştur
+                var sessionId = Guid.NewGuid().ToString();
+                var cacheEntry = new ImportSessionData
+                {
+                    SessionId = sessionId,
+                    FileName = fileName,
+                    SigortaSirketiId = sigortaSirketiId ?? _quickXmlParser.SigortaSirketiId,
+                    Rows = parsedRows,
+                    CreatedAt = _dateTimeService.Now
+                };
+
+                // Cache'e kaydet (30 dakika geçerli)
+                _cache.Set(sessionId, cacheEntry, TimeSpan.FromMinutes(30));
+
+                // Sigorta şirketi adını al
+                var sirket = await _context.SigortaSirketleri
+                    .FirstOrDefaultAsync(s => s.Id == cacheEntry.SigortaSirketiId);
+
+                _logger.LogInformation("XML parsing tamamlandı: {Count} satır", parsedRows.Count);
+
+                return new ExcelImportPreviewDto
+                {
+                    TotalRows = parsedRows.Count,
+                    ValidRows = parsedRows.Count(r => r.IsValid),
+                    InvalidRows = parsedRows.Count(r => !r.IsValid),
+                    Rows = parsedRows,
+                    ImportSessionId = sessionId,
+                    FileName = fileName,
+                    SigortaSirketiId = cacheEntry.SigortaSirketiId,
+                    SigortaSirketiAdi = sirket?.Ad ?? _quickXmlParser.SirketAdi,
+                    DetectedFormat = _quickXmlParser.SirketAdi
+                };
+            }
+
+            // Desteklenmeyen XML formatı
+            _logger.LogWarning("Desteklenmeyen XML formatı: {FileName}", fileName);
+            return new ExcelImportPreviewDto
+            {
+                TotalRows = 0,
+                ValidRows = 0,
+                InvalidRows = 0,
+                Rows = new List<ExcelImportRowDto>(),
+                DetectedFormat = "Bilinmeyen XML Formatı"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "XML parsing hatası: {FileName}", fileName);
+            throw;
+        }
+    }
 
     private async Task<Dictionary<string, List<IDictionary<string, object?>>>> ReadAdditionalSheetsAsync(
         Stream fileStream, string fileName, IExcelParser parser)
@@ -786,14 +895,23 @@ public class ExcelImportService : IExcelImportService
 
     private async Task EnrichRowsWithLookupDataAsync(List<ExcelImportRowDto> rows)
     {
-        var branslar = await _context.Branslar.ToListAsync();
+        // Parser zaten BransId'yi DetectBransIdFromUrunAdi ile belirledi
+        // Sadece BransId null olan satırlar için PoliceTurleri tablosundan eşleştirme yap
         var policeTurleri = await _context.PoliceTurleri.ToListAsync();
+        _logger.LogInformation("EnrichRows: PoliceTurleri count={Count}", policeTurleri.Count);
 
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
 
-            // Branş eşleştirmesi
+            // Parser BransId verdiyse dokunma
+            if (row.BransId.HasValue)
+            {
+                _logger.LogDebug("EnrichRows Row {Row}: BransId already set to {BransId}, skipping", row.RowNumber, row.BransId);
+                continue;
+            }
+
+            // BransId yoksa Brans string'inden PoliceTurleri tablosundan bulmaya çalış
             if (!string.IsNullOrEmpty(row.Brans))
             {
                 var bransUpper = row.Brans.ToUpperInvariant();
@@ -803,18 +921,13 @@ public class ExcelImportService : IExcelImportService
 
                 if (policeTuru != null)
                 {
+                    _logger.LogInformation("EnrichRows Row {Row}: BransId was null, matched '{Brans}' to PoliceTuru '{Turu}' (Id={Id})",
+                        row.RowNumber, row.Brans, policeTuru.Turu, policeTuru.Id);
                     rows[i] = rows[i] with { BransId = policeTuru.Id };
                 }
                 else
                 {
-                    var brans = branslar.FirstOrDefault(b =>
-                        bransUpper.Contains(b.Ad.ToUpperInvariant()) ||
-                        b.Ad.ToUpperInvariant().Contains(bransUpper));
-
-                    if (brans != null)
-                    {
-                        rows[i] = rows[i] with { BransId = brans.Id };
-                    }
+                    _logger.LogWarning("EnrichRows Row {Row}: BransId null, no match found for '{Brans}'", row.RowNumber, row.Brans);
                 }
             }
         }
