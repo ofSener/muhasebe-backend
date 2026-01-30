@@ -7,7 +7,7 @@ using IhsanAI.Domain.Entities;
 namespace IhsanAI.Application.Features.PoliceHavuzlari.Queries;
 
 /// <summary>
-/// Havuzdaki poliçeleri yakalanan poliçelerle karşılaştırarak listeler
+/// Havuzdaki poliçeleri (muhasebe_policehavuz) yakalanan poliçelerle (muhasebe_yakalananpoliceler) karşılaştırarak listeler
 /// </summary>
 public record GetPoliceHavuzlariQuery : IRequest<PoliceHavuzListDto>
 {
@@ -64,21 +64,21 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             .ToListAsync(cancellationToken);
 
         // Yakalanan poliçeleri çek (karşılaştırma için)
-        var capturedQuery = _context.Policeler.AsQueryable();
+        var capturedQuery = _context.YakalananPoliceler.AsQueryable();
 
         if (request.IsOrtagiFirmaId.HasValue)
         {
-            capturedQuery = capturedQuery.Where(x => x.FirmaId == request.IsOrtagiFirmaId.Value);
+            capturedQuery = capturedQuery.Where(x => x.FirmaID == request.IsOrtagiFirmaId.Value);
         }
 
         var capturedPolicies = await capturedQuery
             .Select(p => new
             {
-                p.Id,
+                p.ID,
                 PoliceNo = p.PoliceNumarasi,
                 BrutPrim = (decimal)p.BrutPrim,
-                p.SigortaSirketiId,
-                p.ZeyilNo
+                p.SigortaSirketi,
+                ZeyilNo = 0 // YakalananPoliceler tablosunda ZeyilNo yok
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -105,7 +105,7 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             // PoliceNo ve SigortaSirketiId bazında eşleşme ara
             var match = capturedPolicies.FirstOrDefault(c =>
                 c.PoliceNo == poolItem.PoliceNo &&
-                c.SigortaSirketiId == poolItem.SigortaSirketiId &&
+                c.SigortaSirketi == poolItem.SigortaSirketiId &&
                 c.ZeyilNo == poolItem.ZeyilNo);
 
             string eslesmeDurumu;
@@ -165,7 +165,7 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
                 EslesmeDurumu = eslesmeDurumu,
                 YakalananPrim = match?.BrutPrim,
                 PrimFarki = primFarki,
-                YakalananPoliceId = match?.Id
+                YakalananPoliceId = match?.ID
             });
         }
 
