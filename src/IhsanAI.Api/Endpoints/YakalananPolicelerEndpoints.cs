@@ -80,6 +80,32 @@ public static class YakalananPolicelerEndpoints
         .WithName("BatchUpdateYakalananPoliceler")
         .WithDescription("Yakalanan poliçeleri toplu güncelle");
 
+        group.MapPost("/{id:int}/approve", async (int id, IMediator mediator) =>
+        {
+            var command = new ApproveCapturedPolicyCommand(id);
+            var result = await mediator.Send(command);
+
+            if (result.Success)
+            {
+                return Results.Ok(new
+                {
+                    success = true,
+                    message = result.Message,
+                    policyId = result.PolicyId
+                });
+            }
+            else
+            {
+                return Results.BadRequest(new
+                {
+                    success = false,
+                    errorMessage = result.Message
+                });
+            }
+        })
+        .WithName("ApproveCapturedPolicy")
+        .WithDescription("Yakalanan poliçeyi direkt olarak poliçeler tablosuna kaydet (havuzu bypass et)");
+
         return app;
     }
 }

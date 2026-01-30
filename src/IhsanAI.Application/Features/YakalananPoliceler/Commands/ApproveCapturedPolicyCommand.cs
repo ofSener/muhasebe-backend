@@ -49,7 +49,7 @@ public class ApproveCapturedPolicyCommandHandler : IRequestHandler<ApproveCaptur
         var existingPolicy = await _context.Policeler
             .AnyAsync(p =>
                 p.PoliceNumarasi == capturedPolicy.PoliceNumarasi &&
-                p.SigortaSirketi == capturedPolicy.SigortaSirketi &&
+                p.SigortaSirketiId == capturedPolicy.SigortaSirketi &&
                 p.ZeyilNo == 0, // Yakalanan poliçelerde zeyil no yok, 0 kabul ediyoruz
                 cancellationToken);
 
@@ -73,10 +73,10 @@ public class ApproveCapturedPolicyCommandHandler : IRequestHandler<ApproveCaptur
             UyeId = capturedPolicy.UyeId,
 
             // Poliçe bilgileri
-            SigortaSirketi = capturedPolicy.SigortaSirketi,
-            PoliceTuru = capturedPolicy.PoliceTuru,
+            SigortaSirketiId = capturedPolicy.SigortaSirketi,
+            PoliceTuruId = capturedPolicy.PoliceTuru,
             PoliceNumarasi = capturedPolicy.PoliceNumarasi,
-            Plaka = capturedPolicy.Plaka,
+            Plaka = capturedPolicy.Plaka ?? string.Empty,
 
             // Tarih bilgileri
             TanzimTarihi = capturedPolicy.TanzimTarihi,
@@ -84,17 +84,17 @@ public class ApproveCapturedPolicyCommandHandler : IRequestHandler<ApproveCaptur
             BitisTarihi = capturedPolicy.BitisTarihi,
 
             // Prim bilgileri
-            BrutPrim = (float)capturedPolicy.BrutPrim,
-            NetPrim = (float?)capturedPolicy.NetPrim,
-            Komisyon = (float?)capturedPolicy.Komisyon,
+            BrutPrim = capturedPolicy.BrutPrim,
+            NetPrim = capturedPolicy.NetPrim,
+            Komisyon = 0, // YakalananPolice'de Komisyon alanı yok, varsayılan 0
 
             // Sigortalı bilgileri
             SigortaliAdi = capturedPolicy.SigortaliAdi,
-            MusteriId = null, // YakalananPolice'de MusteriId yok
-            CepTelefonu = null, // YakalananPolice'de telefon yok
+            MusteriId = capturedPolicy.MusteriId, // YakalananPolice'de var
+            CepTelefonu = capturedPolicy.CepTelefonu, // YakalananPolice'de var
 
             // Zeyil bilgileri
-            Zeyil = false,
+            Zeyil = 0, // sbyte: 0 = Zeyil Değil
             ZeyilNo = 0,
 
             // Durum bilgileri
@@ -102,14 +102,21 @@ public class ApproveCapturedPolicyCommandHandler : IRequestHandler<ApproveCaptur
             YenilemeDurumu = 0, // Yenileme durumu bilinmiyor
 
             // Acente bilgileri
-            AcenteAdi = null, // YakalananPolice'de acente bilgisi yok
-            AcenteNo = null,
+            AcenteAdi = capturedPolicy.AcenteAdi,
+            AcenteNo = capturedPolicy.AcenteNo ?? string.Empty,
 
             // Dış poliçe
-            DisPolice = false,
+            DisPolice = capturedPolicy.DisPolice ?? 0,
+
+            // Tarih bilgileri
+            EklenmeTarihi = DateTime.Now,
+            GuncellenmeTarihi = null,
+
+            // Açıklama
+            Aciklama = capturedPolicy.Aciklama,
 
             // Güncelleyen kullanıcı
-            GuncelleyenUyeId = _currentUserService.UserId ?? 0
+            GuncelleyenUyeId = _currentUserService.UyeId
         };
 
         _context.Policeler.Add(newPolicy);

@@ -87,4 +87,7 @@ public class YakalananPolice
     [Column("Aciklama")]
     [MaxLength(150)]
     public string? Aciklama { get; set; }
+
+    [Column("isDeleted")]
+    public sbyte? IsDeleted { get; set; }
 }
