@@ -11,6 +11,7 @@ public record PoliceHavuzItemDto
     public string? Brans { get; init; }
     public int? BransId { get; init; }
     public decimal BrutPrim { get; init; }
+    public DateTime? TanzimTarihi { get; init; }
     public DateTime? BaslangicTarihi { get; init; }
     public DateTime? BitisTarihi { get; init; }
     public DateTime EklenmeTarihi { get; init; }
@@ -20,6 +21,7 @@ public record PoliceHavuzItemDto
     public int ZeyilNo { get; init; }
     public string? PoliceTipi { get; init; }
     public string? PoliceKesenPersonel { get; init; }
+    public decimal? Komisyon { get; init; }
 
     // Eşleşme bilgileri
     public string EslesmeDurumu { get; init; } = "ESLESMEDI"; // ESLESTI, FARK_VAR, ESLESMEDI, AKTARIMDA

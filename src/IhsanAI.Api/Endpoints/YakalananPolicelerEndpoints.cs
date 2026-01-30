@@ -42,6 +42,30 @@ public static class YakalananPolicelerEndpoints
         .WithName("GetYakalananPoliceStats")
         .WithDescription("Yakalanan poliçe istatistiklerini getirir (yetki bazlı filtreleme ile)");
 
+        group.MapGet("/not-in-pool", async (
+            int? firmaId,
+            int page,
+            int pageSize,
+            string? search,
+            int? bransId,
+            int? sigortaSirketiId,
+            IMediator mediator) =>
+        {
+            var query = new GetYakalananNotInPoolQuery
+            {
+                FirmaId = firmaId,
+                Page = page == 0 ? 1 : page,
+                PageSize = pageSize == 0 ? 20 : pageSize,
+                Search = search,
+                BransId = bransId,
+                SigortaSirketiId = sigortaSirketiId
+            };
+            var result = await mediator.Send(query);
+            return Results.Ok(result);
+        })
+        .WithName("GetYakalananNotInPool")
+        .WithDescription("Yakalanan ama havuzda olmayan poliçeleri listeler (Eşleşmeyenler)");
+
         group.MapPut("/batch-update", async (BatchUpdateYakalananPolicelerCommand command, IMediator mediator) =>
         {
             var result = await mediator.Send(command);

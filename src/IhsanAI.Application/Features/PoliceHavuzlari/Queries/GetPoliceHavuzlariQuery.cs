@@ -101,7 +101,8 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
                 PoliceNo = p.PoliceNumarasi,
                 BrutPrim = (decimal)p.BrutPrim,
                 p.SigortaSirketi,
-                ZeyilNo = 0 // YakalananPoliceler tablosunda ZeyilNo yok
+                ZeyilNo = 0, // YakalananPoliceler tablosunda ZeyilNo yok
+                p.SigortaliAdi
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -172,10 +173,11 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             {
                 Id = poolItem.Id,
                 PoliceNo = poolItem.PoliceNo,
-                SigortaliAdi = null, // Müşteri bilgisi ayrı tabloda
+                SigortaliAdi = match?.SigortaliAdi, // YakalananPolice'den alınıyor
                 Brans = bransAdi,
                 BransId = poolItem.BransId,
                 BrutPrim = poolItem.BrutPrim,
+                TanzimTarihi = poolItem.TanzimTarihi,
                 BaslangicTarihi = poolItem.BaslangicTarihi,
                 BitisTarihi = poolItem.BitisTarihi,
                 EklenmeTarihi = poolItem.EklenmeTarihi,
@@ -185,6 +187,7 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
                 ZeyilNo = poolItem.ZeyilNo,
                 PoliceTipi = poolItem.PoliceTipi,
                 PoliceKesenPersonel = poolItem.PoliceKesenPersonel,
+                Komisyon = poolItem.Komisyon,
                 EslesmeDurumu = eslesmeDurumu,
                 YakalananPrim = match?.BrutPrim,
                 PrimFarki = primFarki,
