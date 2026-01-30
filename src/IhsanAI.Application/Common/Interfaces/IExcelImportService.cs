@@ -15,6 +15,11 @@ public interface IExcelImportService
     Task<ExcelImportResultDto> ConfirmImportAsync(string sessionId);
 
     /// <summary>
+    /// Parse edilmiş verileri batch halinde kaydeder (timeout önleme için)
+    /// </summary>
+    Task<ExcelImportResultDto> ConfirmImportBatchAsync(string sessionId, int skip, int take);
+
+    /// <summary>
     /// Desteklenen formatları listeler
     /// </summary>
     Task<SupportedFormatsResponseDto> GetSupportedFormatsAsync();

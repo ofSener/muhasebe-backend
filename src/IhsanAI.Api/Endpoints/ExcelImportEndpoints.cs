@@ -42,6 +42,15 @@ public static class ExcelImportEndpoints
         .WithName("ConfirmExcelImport")
         .WithDescription("Onaylanan verileri veritabanına kaydeder");
 
+        // POST - Confirm batch (timeout önleme için)
+        group.MapPost("/confirm-batch", async (ConfirmBatchRequest request, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new ConfirmImportBatchCommand(request.SessionId, request.Skip, request.Take));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("ConfirmExcelImportBatch")
+        .WithDescription("Verileri batch halinde kaydeder (timeout önleme)");
+
         // GET - Supported formats
         group.MapGet("/formats", async (IMediator mediator) =>
         {
@@ -65,3 +74,4 @@ public static class ExcelImportEndpoints
 }
 
 public record ConfirmImportRequest(string SessionId);
+public record ConfirmBatchRequest(string SessionId, int Skip, int Take);

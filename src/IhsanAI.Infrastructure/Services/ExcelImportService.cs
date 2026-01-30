@@ -216,12 +216,7 @@ public class ExcelImportService : IExcelImportService
                 if (existingPolice != null)
                 {
                     duplicateCount++;
-                    errors.Add(new ExcelImportErrorDto
-                    {
-                        RowNumber = row.RowNumber,
-                        PoliceNo = row.PoliceNo,
-                        ErrorMessage = "Bu poliçe zaten mevcut"
-                    });
+                    // NOT: Mükerrerler errors listesine EKLENMİYOR - ayrı sayılıyor
                     continue;
                 }
 
@@ -302,7 +297,200 @@ public class ExcelImportService : IExcelImportService
             FailedCount = errors.Count,
             DuplicateCount = duplicateCount,
             NewCustomersCreated = newCustomersCreated,
-            Errors = errors
+            Errors = errors,
+            TotalValidRows = validRows.Count,
+            ProcessedSoFar = validRows.Count,
+            IsCompleted = true,
+            HasMoreBatches = false
+        };
+    }
+
+    public async Task<ExcelImportResultDto> ConfirmImportBatchAsync(string sessionId, int skip, int take)
+    {
+        _logger.LogInformation("Batch import: SessionId={SessionId}, Skip={Skip}, Take={Take}", sessionId, skip, take);
+
+        if (!_cache.TryGetValue<ImportSessionData>(sessionId, out var session) || session == null)
+        {
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = "Oturum bulunamadı veya süresi dolmuş. Lütfen dosyayı tekrar yükleyin."
+            };
+        }
+
+        var errors = new List<ExcelImportErrorDto>();  // Sadece gerçek hatalar (exception)
+        var successCount = 0;
+        var duplicateCount = 0;
+
+        // Tüm geçerli satırları al
+        var allValidRows = session.Rows.Where(r => r.IsValid).ToList();
+        var totalValidRows = allValidRows.Count;
+
+        // Batch'i al
+        var batchRows = allValidRows.Skip(skip).Take(take).ToList();
+        var processedSoFar = Math.Min(skip + take, totalValidRows);
+        var hasMoreBatches = processedSoFar < totalValidRows;
+
+        // Batch boşsa (işlem bitti)
+        if (batchRows.Count == 0)
+        {
+            // Son batch ise session'ı temizle
+            if (!hasMoreBatches)
+            {
+                _cache.Remove(sessionId);
+            }
+
+            return new ExcelImportResultDto
+            {
+                Success = true,
+                TotalProcessed = 0,
+                SuccessCount = 0,
+                FailedCount = 0,
+                DuplicateCount = 0,
+                Errors = errors,
+                TotalValidRows = totalValidRows,
+                ProcessedSoFar = processedSoFar,
+                IsCompleted = !hasMoreBatches,
+                HasMoreBatches = hasMoreBatches
+            };
+        }
+
+        // ===== PERFORMANS OPTİMİZASYONU =====
+        HashSet<string> existingPolicyKeys;
+        Dictionary<string, int> customerLookup;
+
+        try
+        {
+            // Batch'teki tüm poliçe numaralarını topla
+            var batchPoliceNos = batchRows
+                .Where(r => !string.IsNullOrEmpty(r.PoliceNo))
+                .Select(r => r.PoliceNo!)
+                .Distinct()
+                .ToList();
+
+            // Tek sorguda mevcut poliçeleri çek (duplicate kontrolü için)
+            var existingPolicies = await _context.PoliceHavuzlari
+                .Where(p => batchPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
+                .Select(p => new { p.PoliceNo, p.ZeyilNo })
+                .ToListAsync();
+
+            // HashSet ile hızlı lookup (PoliceNo_ZeyilNo formatında)
+            existingPolicyKeys = existingPolicies
+                .Select(p => $"{p.PoliceNo}_{p.ZeyilNo}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Müşteri lookup - basitleştirildi
+            customerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Batch hazırlık hatası");
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = $"Veritabanı sorgu hatası: {ex.Message}"
+            };
+        }
+        // ===== OPTİMİZASYON SONU =====
+
+        foreach (var row in batchRows)
+        {
+            try
+            {
+                // Duplicate kontrolü (memory'den)
+                var policyKey = $"{row.PoliceNo}_{GetZeyilNoAsInt(row.ZeyilNo)}";
+                if (existingPolicyKeys.Contains(policyKey))
+                {
+                    duplicateCount++;
+                    // NOT: Mükerrerler errors listesine EKLENMİYOR - ayrı sayılıyor
+                    continue;
+                }
+
+                // Yeni eklenen poliçeyi de set'e ekle (aynı batch içinde duplicate önleme)
+                existingPolicyKeys.Add(policyKey);
+
+                // Müşteri kontrolü (memory'den)
+                var musteriId = row.MusteriId;
+                if (!musteriId.HasValue && !string.IsNullOrEmpty(row.SigortaliAdi))
+                {
+                    var sigortaliAdi = row.SigortaliAdi.Trim().ToUpperInvariant();
+                    if (customerLookup.TryGetValue(sigortaliAdi, out var foundMusteriId))
+                    {
+                        musteriId = foundMusteriId;
+                    }
+                }
+
+                // PoliceHavuz kaydı oluştur
+                var policeHavuz = new PoliceHavuz
+                {
+                    PoliceTipi = row.PoliceTipi ?? "TAHAKKUK",
+                    PoliceNo = row.PoliceNo ?? string.Empty,
+                    Plaka = row.Plaka ?? string.Empty,
+                    ZeyilNo = GetZeyilNoAsInt(row.ZeyilNo),
+                    YenilemeNo = GetYenilemeNoAsSbyte(row.YenilemeNo),
+                    SigortaSirketiId = session.SigortaSirketiId,
+                    TanzimTarihi = row.TanzimTarihi ?? row.BaslangicTarihi ?? _dateTimeService.Now,
+                    BaslangicTarihi = row.BaslangicTarihi ?? _dateTimeService.Now,
+                    BitisTarihi = row.BitisTarihi ?? row.BaslangicTarihi?.AddYears(1) ?? _dateTimeService.Now.AddYears(1),
+                    BrutPrim = row.BrutPrim ?? 0,
+                    NetPrim = row.NetPrim ?? row.BrutPrim ?? 0,
+                    Vergi = 0,
+                    Komisyon = row.Komisyon ?? 0,
+                    BransId = row.BransId ?? 0,
+                    MusteriId = musteriId ?? 0,
+                    SigortaEttirenId = musteriId ?? 0,
+                    IsOrtagiFirmaId = _currentUserService.FirmaId ?? 0,
+                    IsOrtagiSubeId = _currentUserService.SubeId ?? 0,
+                    IsOrtagiUyeId = 0,
+                    EklenmeTarihi = _dateTimeService.Now,
+                    KayitDurumu = 1,
+                    DisPolice = 0,
+                    PoliceTespitKaynakId = 3,
+                    Sube = null,
+                    PoliceKesenPersonel = null
+                };
+
+                _context.PoliceHavuzlari.Add(policeHavuz);
+                successCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Batch satır import hatası: {RowNumber}", row.RowNumber);
+                errors.Add(new ExcelImportErrorDto
+                {
+                    RowNumber = row.RowNumber,
+                    PoliceNo = row.PoliceNo,
+                    ErrorMessage = ex.Message
+                });
+            }
+        }
+
+        // Batch'i kaydet
+        await _context.SaveChangesAsync();
+
+        // Son batch ise session'ı temizle
+        if (!hasMoreBatches)
+        {
+            _cache.Remove(sessionId);
+        }
+
+        _logger.LogInformation(
+            "Batch tamamlandı: {SuccessCount} başarılı, {FailedCount} hatalı, {DuplicateCount} duplicate, Progress: {ProcessedSoFar}/{TotalValidRows}",
+            successCount, errors.Count, duplicateCount, processedSoFar, totalValidRows);
+
+        return new ExcelImportResultDto
+        {
+            Success = true,
+            TotalProcessed = batchRows.Count,
+            SuccessCount = successCount,
+            FailedCount = errors.Count,
+            DuplicateCount = duplicateCount,
+            NewCustomersCreated = 0,
+            Errors = errors,
+            TotalValidRows = totalValidRows,
+            ProcessedSoFar = processedSoFar,
+            IsCompleted = !hasMoreBatches,
+            HasMoreBatches = hasMoreBatches
         };
     }
 

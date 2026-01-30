@@ -10,6 +10,12 @@ public record ExcelImportResultDto
     public int NewCustomersCreated { get; init; }
     public List<ExcelImportErrorDto> Errors { get; init; } = new();
     public string? ErrorMessage { get; init; }
+
+    // Batch progress bilgileri
+    public int TotalValidRows { get; init; }
+    public int ProcessedSoFar { get; init; }
+    public bool IsCompleted { get; init; }
+    public bool HasMoreBatches { get; init; }
 }
 
 public record ExcelImportErrorDto
