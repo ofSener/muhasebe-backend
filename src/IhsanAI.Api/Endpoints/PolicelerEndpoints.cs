@@ -12,13 +12,36 @@ public static class PolicelerEndpoints
             .WithTags("Policies")
             .RequireAuthorization();
 
-        group.MapGet("/", async (int? limit, IMediator mediator) =>
+        group.MapGet("/", async (
+            int? page,
+            int? pageSize,
+            DateTime? startDate,
+            DateTime? endDate,
+            int? policeTuruId,
+            int? sigortaSirketiId,
+            int? uyeId,
+            string? search,
+            int? onayDurumu,
+            IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetPolicelerQuery(limit));
+            var query = new GetPolicelerQuery
+            {
+                Page = page ?? 1,
+                PageSize = pageSize ?? 20,
+                StartDate = startDate,
+                EndDate = endDate,
+                PoliceTuruId = policeTuruId,
+                SigortaSirketiId = sigortaSirketiId,
+                UyeId = uyeId,
+                Search = search,
+                OnayDurumu = onayDurumu
+            };
+
+            var result = await mediator.Send(query);
             return Results.Ok(result);
         })
         .WithName("GetPoliceler")
-        .WithDescription("Poliçeleri listeler");
+        .WithDescription("Poliçe listesini sayfalama ve filtreleme ile getirir");
 
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
