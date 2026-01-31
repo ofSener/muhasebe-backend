@@ -20,6 +20,7 @@ public class ExcelImportService : IExcelImportService
     private readonly ILogger<ExcelImportService> _logger;
     private readonly List<IExcelParser> _parsers;
     private readonly QuickXmlParser _quickXmlParser;
+    private readonly UnicoXmlParser _unicoXmlParser;
 
     public ExcelImportService(
         IApplicationDbContext context,
@@ -47,8 +48,9 @@ public class ExcelImportService : IExcelImportService
             new AkSigortaSkayParser()
         };
 
-        // XML Parser
+        // XML Parsers
         _quickXmlParser = new QuickXmlParser();
+        _unicoXmlParser = new UnicoXmlParser();
 
         // EPPlus lisans ayarı (non-commercial)
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -542,10 +544,17 @@ public class ExcelImportService : IExcelImportService
         var fileNameLower = fileName.ToLowerInvariant();
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
-        // XML dosyası için Quick XML parser'ı kontrol et
-        if (extension == ".xml" && _quickXmlParser.CanParseXml(fileName))
+        // XML dosyası için XML parser'ları kontrol et
+        if (extension == ".xml")
         {
-            return _quickXmlParser.SigortaSirketiId;
+            if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()))
+            {
+                return _unicoXmlParser.SigortaSirketiId;
+            }
+            if (_quickXmlParser.CanParseXml(fileName))
+            {
+                return _quickXmlParser.SigortaSirketiId;
+            }
         }
 
         foreach (var parser in _parsers)
@@ -648,7 +657,7 @@ public class ExcelImportService : IExcelImportService
     #region Private Methods
 
     /// <summary>
-    /// XML dosyasını parse eder (Quick Sigorta XML formatı)
+    /// XML dosyasını parse eder (Quick Sigorta ve Unico Sigorta XML formatları)
     /// </summary>
     private async Task<ExcelImportPreviewDto> ParseXmlFileAsync(Stream fileStream, string fileName, int? sigortaSirketiId)
     {
@@ -656,11 +665,30 @@ public class ExcelImportService : IExcelImportService
 
         try
         {
-            // Quick XML parser'ı kullan
-            if (_quickXmlParser.CanParseXml(fileName) || sigortaSirketiId == _quickXmlParser.SigortaSirketiId)
-            {
-                var parsedRows = _quickXmlParser.ParseXml(fileStream);
+            List<ExcelImportRowDto>? parsedRows = null;
+            int detectedSirketId = 0;
+            string detectedFormat = "Bilinmeyen XML Formatı";
 
+            // Unico XML parser'ı kontrol et
+            if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()) || sigortaSirketiId == _unicoXmlParser.SigortaSirketiId)
+            {
+                parsedRows = _unicoXmlParser.ParseXml(fileStream);
+                detectedSirketId = _unicoXmlParser.SigortaSirketiId;
+                detectedFormat = _unicoXmlParser.SirketAdi;
+                _logger.LogInformation("Unico XML parser kullanılıyor");
+            }
+            // Quick XML parser'ı kontrol et
+            else if (_quickXmlParser.CanParseXml(fileName) || sigortaSirketiId == _quickXmlParser.SigortaSirketiId)
+            {
+                parsedRows = _quickXmlParser.ParseXml(fileStream);
+                detectedSirketId = _quickXmlParser.SigortaSirketiId;
+                detectedFormat = _quickXmlParser.SirketAdi;
+                _logger.LogInformation("Quick XML parser kullanılıyor");
+            }
+
+            // Parser bulunduysa sonuçları işle
+            if (parsedRows != null)
+            {
                 if (parsedRows.Count == 0)
                 {
                     return new ExcelImportPreviewDto
@@ -669,7 +697,7 @@ public class ExcelImportService : IExcelImportService
                         ValidRows = 0,
                         InvalidRows = 0,
                         Rows = new List<ExcelImportRowDto>(),
-                        DetectedFormat = _quickXmlParser.SirketAdi
+                        DetectedFormat = detectedFormat
                     };
                 }
 
@@ -682,7 +710,7 @@ public class ExcelImportService : IExcelImportService
                 {
                     SessionId = sessionId,
                     FileName = fileName,
-                    SigortaSirketiId = sigortaSirketiId ?? _quickXmlParser.SigortaSirketiId,
+                    SigortaSirketiId = sigortaSirketiId ?? detectedSirketId,
                     Rows = parsedRows,
                     CreatedAt = _dateTimeService.Now
                 };
@@ -705,8 +733,8 @@ public class ExcelImportService : IExcelImportService
                     ImportSessionId = sessionId,
                     FileName = fileName,
                     SigortaSirketiId = cacheEntry.SigortaSirketiId,
-                    SigortaSirketiAdi = sirket?.Ad ?? _quickXmlParser.SirketAdi,
-                    DetectedFormat = _quickXmlParser.SirketAdi
+                    SigortaSirketiAdi = sirket?.Ad ?? detectedFormat,
+                    DetectedFormat = detectedFormat
                 };
             }
 
