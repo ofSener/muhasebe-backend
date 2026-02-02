@@ -73,16 +73,51 @@ public class GetYakalananNotInPoolQueryHandler : IRequestHandler<GetYakalananNot
         // Yakalanan poliçeleri çek
         var query = _context.YakalananPoliceler.AsQueryable();
 
-        // Authorization filtresi
+        // 🔒 Authorization filtresi - Firma kontrolü
         var userFirmaId = _currentUserService.FirmaId;
         if (userFirmaId.HasValue)
         {
             query = query.Where(x => x.FirmaId == userFirmaId.Value);
         }
-
-        if (request.FirmaId.HasValue)
+        else if (request.FirmaId.HasValue)
         {
+            // Fallback: Request'ten gelen firmaId
             query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+        }
+
+        // 🔒 Yetki bazlı filtreleme (gorebilecegiPoliceler)
+        var gorebilecegiPoliceler = _currentUserService.GorebilecegiPoliceler ?? Domain.Constants.PermissionLevels.OwnPolicies;
+
+        switch (gorebilecegiPoliceler)
+        {
+            case Domain.Constants.PermissionLevels.AllCompanyPolicies: // "1" - Admin
+                // Tüm firma poliçelerini görebilir
+                break;
+
+            case Domain.Constants.PermissionLevels.BranchPolicies: // "2" - Şube
+                // Sadece kendi şubesinin poliçelerini görebilir
+                if (_currentUserService.SubeId.HasValue)
+                {
+                    query = query.Where(x => x.SubeId == _currentUserService.SubeId.Value);
+                }
+                break;
+
+            case Domain.Constants.PermissionLevels.OwnPolicies: // "3" - Kendisi
+                // Sadece kendine ait poliçeleri görebilir
+                var userId = _currentUserService.UyeId ?? 0;
+                query = query.Where(x => x.UyeId == userId);
+                break;
+
+            case Domain.Constants.PermissionLevels.NoPolicies: // "4" - Hiçbiri
+                // Hiçbir poliçe göremez
+                query = query.Where(x => false);
+                break;
+
+            default:
+                // Varsayılan: Sadece kendine ait
+                var defaultUserId = _currentUserService.UyeId ?? 0;
+                query = query.Where(x => x.UyeId == defaultUserId);
+                break;
         }
 
         // Havuzda OLMAYAN poliçeleri filtrele (Anti-join)

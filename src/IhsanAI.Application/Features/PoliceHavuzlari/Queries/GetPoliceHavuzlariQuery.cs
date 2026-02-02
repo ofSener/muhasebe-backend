@@ -23,10 +23,14 @@ public record GetPoliceHavuzlariQuery : IRequest<PoliceHavuzListDto>
 public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlariQuery, PoliceHavuzListDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetPoliceHavuzlariQueryHandler(IApplicationDbContext context)
+    public GetPoliceHavuzlariQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<PoliceHavuzListDto> Handle(GetPoliceHavuzlariQuery request, CancellationToken cancellationToken)
@@ -34,9 +38,50 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
         // Havuzdaki poliçeleri çek
         var poolQuery = _context.PoliceHavuzlari.AsQueryable();
 
-        if (request.IsOrtagiFirmaId.HasValue)
+        // 🔒 1. FİRMA FİLTRESİ - ZORUNLU (Kullanıcı sadece kendi firmasının havuzunu görür)
+        if (_currentUserService.FirmaId.HasValue)
         {
+            poolQuery = poolQuery.Where(x => x.IsOrtagiFirmaId == _currentUserService.FirmaId.Value);
+        }
+        else if (request.IsOrtagiFirmaId.HasValue)
+        {
+            // Fallback: Request'ten gelen firmaId (backward compatibility)
             poolQuery = poolQuery.Where(x => x.IsOrtagiFirmaId == request.IsOrtagiFirmaId.Value);
+        }
+
+        // 🔒 2. YETKİ BAZLI FİLTRELEME (gorebilecegiPoliceler)
+        var gorebilecegiPoliceler = _currentUserService.GorebilecegiPoliceler ?? Domain.Constants.PermissionLevels.OwnPolicies;
+
+        switch (gorebilecegiPoliceler)
+        {
+            case Domain.Constants.PermissionLevels.AllCompanyPolicies: // "1" - Admin
+                // Tüm firma havuzunu görebilir (filtre ekleme)
+                break;
+
+            case Domain.Constants.PermissionLevels.BranchPolicies: // "2" - Şube
+                // Sadece kendi şubesinin havuzunu görebilir
+                if (_currentUserService.SubeId.HasValue)
+                {
+                    poolQuery = poolQuery.Where(x => x.IsOrtagiSubeId == _currentUserService.SubeId.Value);
+                }
+                break;
+
+            case Domain.Constants.PermissionLevels.OwnPolicies: // "3" - Kendisi
+                // Sadece kendine ait havuz kayıtlarını görebilir
+                var userId = _currentUserService.UyeId ?? 0;
+                poolQuery = poolQuery.Where(x => x.IsOrtagiUyeId == userId);
+                break;
+
+            case Domain.Constants.PermissionLevels.NoPolicies: // "4" - Hiçbiri
+                // Hiçbir havuz kaydı göremez
+                poolQuery = poolQuery.Where(x => false);
+                break;
+
+            default:
+                // Varsayılan: Sadece kendine ait
+                var defaultUserId = _currentUserService.UyeId ?? 0;
+                poolQuery = poolQuery.Where(x => x.IsOrtagiUyeId == defaultUserId);
+                break;
         }
 
         if (request.BransId.HasValue)
@@ -89,9 +134,44 @@ public class GetPoliceHavuzlariQueryHandler : IRequestHandler<GetPoliceHavuzlari
             .Where(x => poolPoliceNos.Contains(x.PoliceNumarasi) &&
                         poolSigortaSirketIds.Contains(x.SigortaSirketi));
 
-        if (request.IsOrtagiFirmaId.HasValue)
+        // 🔒 Yakalanan poliçeler için de yetki kontrolü uygula
+        if (_currentUserService.FirmaId.HasValue)
         {
+            capturedQuery = capturedQuery.Where(x => x.FirmaId == _currentUserService.FirmaId.Value);
+        }
+        else if (request.IsOrtagiFirmaId.HasValue)
+        {
+            // Fallback: Request'ten gelen firmaId
             capturedQuery = capturedQuery.Where(x => x.FirmaId == request.IsOrtagiFirmaId.Value);
+        }
+
+        // Yetki bazlı filtreleme (YakalananPoliceler için)
+        switch (gorebilecegiPoliceler)
+        {
+            case Domain.Constants.PermissionLevels.AllCompanyPolicies: // "1"
+                // Tüm firma poliçelerini görebilir
+                break;
+
+            case Domain.Constants.PermissionLevels.BranchPolicies: // "2"
+                if (_currentUserService.SubeId.HasValue)
+                {
+                    capturedQuery = capturedQuery.Where(x => x.SubeId == _currentUserService.SubeId.Value);
+                }
+                break;
+
+            case Domain.Constants.PermissionLevels.OwnPolicies: // "3"
+                var userId = _currentUserService.UyeId ?? 0;
+                capturedQuery = capturedQuery.Where(x => x.UyeId == userId);
+                break;
+
+            case Domain.Constants.PermissionLevels.NoPolicies: // "4"
+                capturedQuery = capturedQuery.Where(x => false);
+                break;
+
+            default:
+                var defaultUserId = _currentUserService.UyeId ?? 0;
+                capturedQuery = capturedQuery.Where(x => x.UyeId == defaultUserId);
+                break;
         }
 
         var capturedPolicies = await capturedQuery
