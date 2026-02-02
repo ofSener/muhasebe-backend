@@ -91,6 +91,31 @@ public static class PolicelerEndpoints
         .WithName("BatchApprovePolicies")
         .WithDescription("Toplu poliçe onaylama");
 
+        group.MapGet("/renewals", async (
+            int? page,
+            int? pageSize,
+            int? daysAhead,
+            int? policeTuruId,
+            int? sigortaSirketiId,
+            string? search,
+            IMediator mediator) =>
+        {
+            var query = new GetPolicelerRenewalsQuery
+            {
+                Page = page ?? 1,
+                PageSize = pageSize ?? 20,
+                DaysAhead = daysAhead ?? 30,
+                PoliceTuruId = policeTuruId,
+                SigortaSirketiId = sigortaSirketiId,
+                Search = search
+            };
+
+            var result = await mediator.Send(query);
+            return Results.Ok(result);
+        })
+        .WithName("GetPolicelerRenewals")
+        .WithDescription("Yenileme takibi için bitiş tarihi yaklaşan poliçeleri getirir");
+
         return app;
     }
 }

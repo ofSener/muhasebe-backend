@@ -2,29 +2,25 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
 using IhsanAI.Application.Features.Policeler.Dtos;
-using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Features.Policeler.Queries;
 
-public record GetPolicelerQuery : IRequest<PoliceListDto>
+public record GetPolicelerRenewalsQuery : IRequest<PoliceListDto>
 {
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 20;
-    public DateTime? StartDate { get; init; }
-    public DateTime? EndDate { get; init; }
+    public int DaysAhead { get; init; } = 30;
     public int? PoliceTuruId { get; init; }
     public int? SigortaSirketiId { get; init; }
-    public int? UyeId { get; init; }
     public string? Search { get; init; }
-    public int? OnayDurumu { get; init; }
 }
 
-public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, PoliceListDto>
+public class GetPolicelerRenewalsQueryHandler : IRequestHandler<GetPolicelerRenewalsQuery, PoliceListDto>
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
 
-    public GetPolicelerQueryHandler(
+    public GetPolicelerRenewalsQueryHandler(
         IApplicationDbContext context,
         ICurrentUserService currentUserService)
     {
@@ -32,24 +28,20 @@ public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, Polic
         _currentUserService = currentUserService;
     }
 
-    public async Task<PoliceListDto> Handle(GetPolicelerQuery request, CancellationToken cancellationToken)
+    public async Task<PoliceListDto> Handle(GetPolicelerRenewalsQuery request, CancellationToken cancellationToken)
     {
+        var today = DateTime.Today;
+        var futureDate = today.AddDays(request.DaysAhead);
+
         var query = _context.Policeler
             .AsQueryable()
-            .ApplyAuthorizationFilters(_currentUserService);
-
-        // Date range filter (TanzimTarihi'ne göre)
-        if (request.StartDate.HasValue)
-        {
-            var startDate = request.StartDate.Value.Date;
-            query = query.Where(x => x.TanzimTarihi >= startDate);
-        }
-
-        if (request.EndDate.HasValue)
-        {
-            var endDate = request.EndDate.Value.Date.AddDays(1).AddTicks(-1);
-            query = query.Where(x => x.TanzimTarihi <= endDate);
-        }
+            .ApplyAuthorizationFilters(_currentUserService)
+            // Sadece onaylı poliçeler (havuzda değil)
+            .Where(x => x.OnayDurumu == 1)
+            // Sadece yenilenmemiş poliçeler
+            .Where(x => x.YenilemeDurumu == 0)
+            // Bitiş tarihi bugünden sonra ve X gün içinde
+            .Where(x => x.BitisTarihi >= today && x.BitisTarihi <= futureDate);
 
         // Police Turu filter
         if (request.PoliceTuruId.HasValue)
@@ -61,18 +53,6 @@ public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, Polic
         if (request.SigortaSirketiId.HasValue)
         {
             query = query.Where(x => x.SigortaSirketiId == request.SigortaSirketiId.Value);
-        }
-
-        // Uye filter
-        if (request.UyeId.HasValue)
-        {
-            query = query.Where(x => x.UyeId == request.UyeId.Value);
-        }
-
-        // Onay Durumu filter
-        if (request.OnayDurumu.HasValue)
-        {
-            query = query.Where(x => x.OnayDurumu == request.OnayDurumu.Value);
         }
 
         // Search filter (PoliceNumarasi, Plaka, SigortaliAdi)
@@ -90,12 +70,13 @@ public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, Polic
 
         // Pagination
         var page = Math.Max(1, request.Page);
-        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var pageSize = Math.Clamp(request.PageSize, 1, 1000);
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        // Get paginated items
+        // Get paginated items - Order by BitisTarihi (closest first)
         var items = await query
-            .OrderByDescending(x => x.EklenmeTarihi)
+            .OrderBy(x => x.BitisTarihi)
+            .ThenByDescending(x => x.BrutPrim)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .AsNoTracking()
@@ -166,9 +147,9 @@ public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, Polic
             GuncelleyenUyeId = item.GuncelleyenUyeId,
             Zeyil = item.Zeyil,
             ZeyilNo = item.ZeyilNo,
-            YenilemeDurumu = item.YenilemeDurumu,
             OnayDurumu = item.OnayDurumu,
-            // Prodüktör bilgileri (ProduktorId aslında KullaniciId)
+            YenilemeDurumu = item.YenilemeDurumu,
+            // Prodüktör bilgileri
             ProduktorId = item.ProduktorId,
             ProduktorAdi = kullanicilar.TryGetValue(item.ProduktorId, out var produktor) ? produktor : null,
             ProduktorSubeId = item.ProduktorSubeId,
@@ -188,24 +169,5 @@ public class GetPolicelerQueryHandler : IRequestHandler<GetPolicelerQuery, Polic
             PageSize = pageSize,
             TotalPages = totalPages
         };
-    }
-}
-
-public record GetPoliceByIdQuery(int Id) : IRequest<Police?>;
-
-public class GetPoliceByIdQueryHandler : IRequestHandler<GetPoliceByIdQuery, Police?>
-{
-    private readonly IApplicationDbContext _context;
-
-    public GetPoliceByIdQueryHandler(IApplicationDbContext context)
-    {
-        _context = context;
-    }
-
-    public async Task<Police?> Handle(GetPoliceByIdQuery request, CancellationToken cancellationToken)
-    {
-        return await _context.Policeler
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
     }
 }

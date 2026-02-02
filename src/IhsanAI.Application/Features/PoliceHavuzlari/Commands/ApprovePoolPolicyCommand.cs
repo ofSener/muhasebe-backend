@@ -85,16 +85,20 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             BrutPrim = (float)poolPolicy.BrutPrim,
             NetPrim = (float)poolPolicy.NetPrim,
             SigortaliAdi = null, // Müşteri bilgisi ayrı tabloda
+
+            // Yakalanan poliçedeki bilgiler (IsOrtagi kolonlarından)
+            // IsOrtagiUyeId → yakalanan UyeId (ProduktorId olarak da kullanılıyor)
             ProduktorId = poolPolicy.IsOrtagiUyeId,
             ProduktorSubeId = poolPolicy.IsOrtagiSubeId,
-            UyeId = _currentUserService.UyeId ?? 0,
-            SubeId = poolPolicy.IsOrtagiSubeId,
-            FirmaId = poolPolicy.IsOrtagiFirmaId,
+            UyeId = poolPolicy.IsOrtagiUyeId,        // ✅ Yakalanan poliçedeki UyeId
+            SubeId = poolPolicy.IsOrtagiSubeId,      // ✅ Yakalanan poliçedeki SubeId
+            FirmaId = poolPolicy.IsOrtagiFirmaId,    // ✅ Yakalanan poliçedeki FirmaId
+
             MusteriId = poolPolicy.MusteriId,
             CepTelefonu = null,
             GuncelleyenUyeId = _currentUserService.UyeId,
             DisPolice = poolPolicy.DisPolice,
-            AcenteAdi = null,
+            AcenteAdi = poolPolicy.PoliceKesenPersonel, // PoliceKesenPersonel → AcenteAdi
             AcenteNo = string.Empty,
             EklenmeTarihi = DateTime.UtcNow,
             Aciklama = poolPolicy.Aciklama,
