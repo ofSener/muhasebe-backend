@@ -18,13 +18,25 @@ public record PoliceListItemDto
     public decimal BrutPrim { get; init; }
     public decimal NetPrim { get; init; }
     public string? SigortaliAdi { get; init; }
+    public string? CepTelefonu { get; init; }
     public decimal? Komisyon { get; init; }
     public string? AcenteAdi { get; init; }
     public int? GuncelleyenUyeId { get; init; }
     public string? GuncelleyenUyeAdi { get; init; }
     public sbyte Zeyil { get; init; }
     public int? ZeyilNo { get; init; }
+    public int YenilemeDurumu { get; init; }
     public int OnayDurumu { get; init; }
+
+    // Prodüktör ve Şube bilgileri
+    public int ProduktorId { get; init; }
+    public string? ProduktorAdi { get; init; }
+    public int ProduktorSubeId { get; init; }
+    public string? ProduktorSubeAdi { get; init; }
+    public int SubeId { get; init; }
+    public string? SubeAdi { get; init; }
+    public int UyeId { get; init; }
+    public string? UyeAdi { get; init; }
 }
 
 /// <summary>
