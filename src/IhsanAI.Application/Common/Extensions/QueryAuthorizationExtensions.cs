@@ -77,12 +77,19 @@ public static class QueryAuthorizationExtensions
     /// <summary>
     /// Şube bazlı filtreleme için extension.
     /// SubeId kontrolü yapar (opsiyonel).
+    /// Ana Yönetici (AnaYoneticimi = 0) tüm şubeleri görebilir.
     /// </summary>
     public static IQueryable<T> ApplySubeFilter<T>(
         this IQueryable<T> query,
         ICurrentUserService currentUser,
         Expression<Func<T, int>> subeIdSelector)
     {
+        // Ana Yönetici firma içindeki tüm şubeleri görebilir
+        if (currentUser.IsAnaYonetici)
+        {
+            return query;
+        }
+
         // GorebilecegiPoliceler = "2" ise sadece kendi şubesini görür
         if (currentUser.GorebilecegiPoliceler == "2" && currentUser.SubeId.HasValue)
         {
@@ -103,12 +110,19 @@ public static class QueryAuthorizationExtensions
     /// <summary>
     /// Nullable şube bazlı filtreleme için extension.
     /// SubeId kontrolü yapar (opsiyonel).
+    /// Ana Yönetici (AnaYoneticimi = 0) tüm şubeleri görebilir.
     /// </summary>
     public static IQueryable<T> ApplySubeFilterNullable<T>(
         this IQueryable<T> query,
         ICurrentUserService currentUser,
         Expression<Func<T, int?>> subeIdSelector)
     {
+        // Ana Yönetici firma içindeki tüm şubeleri görebilir
+        if (currentUser.IsAnaYonetici)
+        {
+            return query;
+        }
+
         if (!currentUser.SubeId.HasValue) return query;
 
         var userSubeId = currentUser.SubeId.Value;
@@ -124,6 +138,7 @@ public static class QueryAuthorizationExtensions
     /// <summary>
     /// Müşteri erişim filtresi uygular.
     /// GorebilecegiPoliceler değerine göre firma veya şube bazlı filtre uygular.
+    /// Ana Yönetici (AnaYoneticimi = 0) firma içindeki tüm müşterileri görebilir.
     /// "1" = Firma yöneticisi - tüm firmadaki müşteriler
     /// "2" = Şube çalışanı - sadece şubedeki müşteriler
     /// </summary>
@@ -133,8 +148,14 @@ public static class QueryAuthorizationExtensions
         Expression<Func<T, int?>> firmaIdSelector,
         Expression<Func<T, int?>> subeIdSelector)
     {
-        // Firma filtresi her zaman uygulanır
+        // Firma filtresi her zaman uygulanır (Ana Yönetici dahil)
         query = query.ApplyFirmaFilterNullable(currentUser, firmaIdSelector);
+
+        // Ana Yönetici firma içindeki tüm şubeleri görebilir
+        if (currentUser.IsAnaYonetici)
+        {
+            return query;
+        }
 
         // gorebilecegiPoliceler = "2" ise sadece şube müşterilerini gör
         if (currentUser.GorebilecegiPoliceler == "2" && currentUser.SubeId.HasValue)

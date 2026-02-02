@@ -66,6 +66,23 @@ public static class YakalananPolicelerEndpoints
         .WithName("GetYakalananNotInPool")
         .WithDescription("Yakalanan ama havuzda olmayan poliçeleri listeler (Eşleşmeyenler)");
 
+        group.MapPut("/{id:int}", async (int id, UpdateYakalananPoliceCommand command, IMediator mediator) =>
+        {
+            if (id != command.Id)
+            {
+                return Results.BadRequest(new { success = false, message = "ID uyuşmazlığı" });
+            }
+
+            var result = await mediator.Send(command);
+            return Results.Ok(new
+            {
+                success = result.Success,
+                message = result.Message
+            });
+        })
+        .WithName("UpdateYakalananPolice")
+        .WithDescription("Yakalanan poliçeyi güncelle (Prodüktör/Şube atama)");
+
         group.MapPut("/batch-update", async (BatchUpdateYakalananPolicelerCommand command, IMediator mediator) =>
         {
             var result = await mediator.Send(command);

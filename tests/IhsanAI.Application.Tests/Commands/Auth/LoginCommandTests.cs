@@ -203,7 +203,6 @@ public class LoginCommandTests : TestBase
         result.User!.Id.Should().Be(1);
         result.User.Email.Should().Be("test@ihsanai.com");
         result.User.Name.Should().Be("Test User");
-        result.User.Role.Should().Be("admin");
     }
 
     [Fact]
@@ -235,7 +234,7 @@ public class LoginCommandTests : TestBase
     }
 
     [Fact]
-    public async Task Handle_WithUserWithoutPermissions_ReturnsViewerRole()
+    public async Task Handle_WithUserWithoutPermissions_ReturnsNullPermissions()
     {
         // Arrange
         var testUser = CreateTestUser(email: "test@ihsanai.com", password: "password123", muhasebeYetkiId: null);
@@ -256,17 +255,16 @@ public class LoginCommandTests : TestBase
 
         // Assert
         result.Success.Should().BeTrue();
-        result.User!.Role.Should().Be("viewer");
-        result.User.Permissions.Should().BeNull();
+        result.User!.Permissions.Should().BeNull();
     }
 
     [Theory]
-    [InlineData("1", "admin")]
-    [InlineData("2", "editor")]
-    [InlineData("3", "viewer")]
-    [InlineData("4", "viewer")]
-    [InlineData("", "viewer")]
-    public async Task Handle_DeterminesCorrectRole_BasedOnPermissions(string gorebilecegiPoliceler, string expectedRole)
+    [InlineData("1")]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("4")]
+    [InlineData("")]
+    public async Task Handle_ReturnsCorrectPermissions_BasedOnYetki(string gorebilecegiPoliceler)
     {
         // Arrange
         var testUser = CreateTestUser(email: "test@ihsanai.com", password: "password123", muhasebeYetkiId: 1);
@@ -288,7 +286,8 @@ public class LoginCommandTests : TestBase
 
         // Assert
         result.Success.Should().BeTrue();
-        result.User!.Role.Should().Be(expectedRole);
+        result.User!.Permissions.Should().NotBeNull();
+        result.User.Permissions!.GorebilecegiPoliceler.Should().Be(gorebilecegiPoliceler);
     }
 
     [Fact]

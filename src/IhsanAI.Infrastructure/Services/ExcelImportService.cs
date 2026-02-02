@@ -571,7 +571,7 @@ public class ExcelImportService : IExcelImportService
     /// <summary>
     /// İçerik bazlı parser tespiti - header kolonlarına bakarak en uygun parser'ı bulur
     /// </summary>
-    private async Task<IExcelParser?> DetectParserFromContentAsync(Stream fileStream, string fileName)
+    private Task<IExcelParser?> DetectParserFromContentAsync(Stream fileStream, string fileName)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         var headers = new List<string>();
@@ -584,7 +584,7 @@ public class ExcelImportService : IExcelImportService
                 var worksheet = package.Workbook.Worksheets.FirstOrDefault();
 
                 if (worksheet == null || worksheet.Dimension == null)
-                    return null;
+                    return Task.FromResult<IExcelParser?>(null);
 
                 // Her parser için header satırını dene ve kolonları kontrol et
                 foreach (var parser in _parsers)
@@ -603,7 +603,7 @@ public class ExcelImportService : IExcelImportService
                     {
                         _logger.LogInformation("İçerik bazlı tespit: {Parser} parser'ı seçildi (header row: {Row})",
                             parser.SirketAdi, headerRow);
-                        return parser;
+                        return Task.FromResult<IExcelParser?>(parser);
                     }
                 }
             }
@@ -616,7 +616,7 @@ public class ExcelImportService : IExcelImportService
                 });
 
                 if (result.Tables.Count == 0)
-                    return null;
+                    return Task.FromResult<IExcelParser?>(null);
 
                 var table = result.Tables[0];
 
@@ -641,7 +641,7 @@ public class ExcelImportService : IExcelImportService
                     {
                         _logger.LogInformation("İçerik bazlı tespit (xls): {Parser} parser'ı seçildi (header row: {Row})",
                             parser.SirketAdi, headerRowIdx);
-                        return parser;
+                        return Task.FromResult<IExcelParser?>(parser);
                     }
                 }
             }
@@ -651,7 +651,7 @@ public class ExcelImportService : IExcelImportService
             _logger.LogWarning(ex, "İçerik bazlı parser tespiti sırasında hata oluştu");
         }
 
-        return null;
+        return Task.FromResult<IExcelParser?>(null);
     }
 
     #region Private Methods
@@ -756,13 +756,13 @@ public class ExcelImportService : IExcelImportService
         }
     }
 
-    private async Task<Dictionary<string, List<IDictionary<string, object?>>>> ReadAdditionalSheetsAsync(
+    private Task<Dictionary<string, List<IDictionary<string, object?>>>> ReadAdditionalSheetsAsync(
         Stream fileStream, string fileName, IExcelParser parser)
     {
         var result = new Dictionary<string, List<IDictionary<string, object?>>>();
 
         if (parser.AdditionalSheetNames == null || parser.AdditionalSheetNames.Length == 0)
-            return result;
+            return Task.FromResult(result);
 
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
@@ -870,7 +870,7 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
     private async Task<List<IDictionary<string, object?>>> ReadExcelFileAsync(Stream fileStream, string fileName, IExcelParser parser)

@@ -25,12 +25,18 @@ public record YakalananNotInPoolItemDto
     public string? Brans { get; init; }
     public int BransId { get; init; }
     public decimal BrutPrim { get; init; }
+    public decimal NetPrim { get; init; }
     public DateTime TanzimTarihi { get; init; }
     public DateTime BaslangicTarihi { get; init; }
     public DateTime BitisTarihi { get; init; }
+    public DateTime EklenmeTarihi { get; init; }
     public string? SigortaSirketi { get; init; }
     public int SigortaSirketiId { get; init; }
     public string? Plaka { get; init; }
+
+    // Prodüktör ve Şube bilgileri
+    public string? ProduktorAdi { get; init; }
+    public string? SubeAdi { get; init; }
 
     // Havuza göndermek için gerekli alanlar
     public int FirmaId { get; init; }
@@ -126,9 +132,11 @@ public class GetYakalananNotInPoolQueryHandler : IRequestHandler<GetYakalananNot
                 y.PoliceTuru,
                 y.SigortaSirketi,
                 y.BrutPrim,
+                y.NetPrim,
                 y.TanzimTarihi,
                 y.BaslangicTarihi,
                 y.BitisTarihi,
+                y.EklenmeTarihi,
                 y.Plaka,
                 y.FirmaId,
                 y.SubeId,
@@ -153,6 +161,20 @@ public class GetYakalananNotInPoolQueryHandler : IRequestHandler<GetYakalananNot
             .AsNoTracking()
             .ToDictionaryAsync(s => s.Id, s => s.Ad, cancellationToken);
 
+        // Prodüktör adlarını çek
+        var produktorIds = items.Select(i => i.ProduktorId).Distinct().ToList();
+        var produktorler = await _context.Kullanicilar
+            .Where(k => produktorIds.Contains(k.Id))
+            .AsNoTracking()
+            .ToDictionaryAsync(k => k.Id, k => (k.Adi ?? "") + " " + (k.Soyadi ?? ""), cancellationToken);
+
+        // Şube adlarını çek
+        var subeIds = items.Select(i => i.SubeId).Distinct().ToList();
+        var subeler = await _context.Subeler
+            .Where(s => subeIds.Contains(s.Id))
+            .AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, s => s.SubeAdi, cancellationToken);
+
         // DTO'ya dönüştür
         var itemDtos = items.Select(item => new YakalananNotInPoolItemDto
         {
@@ -162,12 +184,16 @@ public class GetYakalananNotInPoolQueryHandler : IRequestHandler<GetYakalananNot
             Brans = branslar.GetValueOrDefault(item.PoliceTuru),
             BransId = item.PoliceTuru,
             BrutPrim = (decimal)item.BrutPrim,
+            NetPrim = (decimal)item.NetPrim,
             TanzimTarihi = item.TanzimTarihi,
             BaslangicTarihi = item.BaslangicTarihi,
             BitisTarihi = item.BitisTarihi,
+            EklenmeTarihi = item.EklenmeTarihi,
             SigortaSirketi = sirketler.GetValueOrDefault(item.SigortaSirketi),
             SigortaSirketiId = item.SigortaSirketi,
             Plaka = item.Plaka,
+            ProduktorAdi = produktorler.GetValueOrDefault(item.ProduktorId),
+            SubeAdi = subeler.GetValueOrDefault(item.SubeId),
             FirmaId = item.FirmaId,
             SubeId = item.SubeId,
             UyeId = item.UyeId,

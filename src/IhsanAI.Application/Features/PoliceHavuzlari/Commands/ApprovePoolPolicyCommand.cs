@@ -45,6 +45,14 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             };
         }
 
+        // Fetch matching captured policy to get ProduktorId and ProduktorSubeId
+        var yakalananPolice = await _context.YakalananPoliceler
+            .FirstOrDefaultAsync(x =>
+                x.PoliceNumarasi == poolPolicy.PoliceNo &&
+                x.SigortaSirketi == poolPolicy.SigortaSirketiId &&
+                x.IsDeleted != 1,  // Exclude deleted records
+                cancellationToken);
+
         // Firma yetkisi kontrolü
         if (_currentUserService.FirmaId.HasValue && poolPolicy.IsOrtagiFirmaId != _currentUserService.FirmaId.Value)
         {
@@ -78,7 +86,7 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             SigortaSirketiId = poolPolicy.SigortaSirketiId,
             PoliceTuruId = poolPolicy.BransId,
             PoliceNumarasi = poolPolicy.PoliceNo,
-            Plaka = poolPolicy.Plaka,
+            Plaka = yakalananPolice?.Plaka ?? poolPolicy.Plaka,
             TanzimTarihi = poolPolicy.TanzimTarihi,
             BaslangicTarihi = poolPolicy.BaslangicTarihi,
             BitisTarihi = poolPolicy.BitisTarihi,
@@ -86,13 +94,12 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             NetPrim = (float)poolPolicy.NetPrim,
             SigortaliAdi = null, // Müşteri bilgisi ayrı tabloda
 
-            // Yakalanan poliçedeki bilgiler (IsOrtagi kolonlarından)
-            // IsOrtagiUyeId → yakalanan UyeId (ProduktorId olarak da kullanılıyor)
-            ProduktorId = poolPolicy.IsOrtagiUyeId,
-            ProduktorSubeId = poolPolicy.IsOrtagiSubeId,
-            UyeId = poolPolicy.IsOrtagiUyeId,        // ✅ Yakalanan poliçedeki UyeId
-            SubeId = poolPolicy.IsOrtagiSubeId,      // ✅ Yakalanan poliçedeki SubeId
-            FirmaId = poolPolicy.IsOrtagiFirmaId,    // ✅ Yakalanan poliçedeki FirmaId
+            // Yakalanan poliçedeki bilgiler (öncelikle yakalanan poliçeden, yoksa IsOrtagi kolonlarından)
+            ProduktorId = yakalananPolice?.ProduktorId ?? poolPolicy.IsOrtagiUyeId,
+            ProduktorSubeId = yakalananPolice?.ProduktorSubeId ?? poolPolicy.IsOrtagiSubeId,
+            UyeId = yakalananPolice?.UyeId ?? poolPolicy.IsOrtagiUyeId,
+            SubeId = yakalananPolice?.SubeId ?? poolPolicy.IsOrtagiSubeId,
+            FirmaId = yakalananPolice?.FirmaId ?? poolPolicy.IsOrtagiFirmaId,
 
             MusteriId = poolPolicy.MusteriId,
             CepTelefonu = null,

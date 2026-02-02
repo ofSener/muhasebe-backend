@@ -24,19 +24,10 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
         if (kullanici == null)
             return null;
 
-        // Get permissions
+        // Get permissions from yetki table (if exists)
         var yetki = kullanici.MuhasebeYetkiId.HasValue
             ? await _context.Yetkiler.FirstOrDefaultAsync(y => y.Id == kullanici.MuhasebeYetkiId, cancellationToken)
             : null;
-
-        // Determine role
-        var role = yetki?.GorebilecegiPolicelerveKartlar switch
-        {
-            "1" => "admin",
-            "2" => "editor",
-            "3" => "viewer",
-            _ => "viewer"
-        };
 
         // Get firma and sube names
         var firma = kullanici.FirmaId.HasValue
@@ -47,16 +38,17 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
             ? await _context.Subeler.FirstOrDefaultAsync(s => s.Id == kullanici.SubeId, cancellationToken)
             : null;
 
-        return new UserDto
+        // Determine permissions based on AnaYoneticimi status
+        PermissionsDto? permissions;
+        if (kullanici.AnaYoneticimi == 0)
         {
-            Id = kullanici.Id,
-            Name = $"{kullanici.Adi} {kullanici.Soyadi}".Trim(),
-            Email = kullanici.Email ?? string.Empty,
-            Role = role,
-            FirmaId = kullanici.FirmaId,
-            SubeId = kullanici.SubeId,
-            ProfilResmi = kullanici.ProfilYolu,
-            Permissions = yetki != null ? new PermissionsDto
+            // Ana Yönetici - full permissions
+            permissions = GetFullPermissions();
+        }
+        else if (yetki != null)
+        {
+            // Normal user with yetki record
+            permissions = new PermissionsDto
             {
                 // Poliçe Yetkileri
                 GorebilecegiPoliceler = yetki.GorebilecegiPolicelerveKartlar,
@@ -84,7 +76,61 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
                 FinansRaporlariGorebilsin = yetki.FinansRaporlariGorebilsin,
                 // Entegrasyon Yetkileri
                 DriveEntegrasyonuGorebilsin = yetki.DriveEntegrasyonuGorebilsin
-            } : null
+            };
+        }
+        else
+        {
+            // No yetki record and not AnaYonetici - null permissions
+            permissions = null;
+        }
+
+        return new UserDto
+        {
+            Id = kullanici.Id,
+            Name = $"{kullanici.Adi} {kullanici.Soyadi}".Trim(),
+            Email = kullanici.Email ?? string.Empty,
+            FirmaId = kullanici.FirmaId,
+            SubeId = kullanici.SubeId,
+            SubeAdi = sube?.SubeAdi,
+            ProfilResmi = kullanici.ProfilYolu,
+            Permissions = permissions
+        };
+    }
+
+    private static PermissionsDto GetFullPermissions()
+    {
+        return new PermissionsDto
+        {
+            // Policy Permissions
+            GorebilecegiPoliceler = "1",
+            PoliceDuzenleyebilsin = "1",
+            PoliceHavuzunuGorebilsin = "1",
+            PoliceAktarabilsin = "1",
+            PoliceDosyalarinaErisebilsin = "1",
+            PoliceYakalamaSecenekleri = "1",
+
+            // Management Permissions
+            YetkilerSayfasindaIslemYapabilsin = "1",
+            AcenteliklerSayfasindaIslemYapabilsin = "1",
+            KomisyonOranlariniDuzenleyebilsin = "1",
+            ProduktorleriGorebilsin = "1",
+            AcenteliklereGorePoliceYakalansin = "1",
+
+            // Customer Permissions
+            MusterileriGorebilsin = "1",
+            MusteriListesiGorebilsin = "1",
+            MusteriDetayGorebilsin = "1",
+            YenilemeTakibiGorebilsin = "1",
+
+            // Finance Permissions
+            FinansSayfasiniGorebilsin = "1",
+            FinansDashboardGorebilsin = "1",
+            PoliceOdemeleriGorebilsin = "1",
+            TahsilatTakibiGorebilsin = "1",
+            FinansRaporlariGorebilsin = "1",
+
+            // Integration Permissions
+            DriveEntegrasyonuGorebilsin = "1"
         };
     }
 }

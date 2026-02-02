@@ -97,9 +97,6 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             ? await _context.Yetkiler.FirstOrDefaultAsync(y => y.Id == kullanici.MuhasebeYetkiId, cancellationToken)
             : null;
 
-        // Role belirle
-        var role = DetermineRole(yetki);
-
         // Yeni JWT token oluştur
         var jwtSettings = _configuration.GetSection("Jwt");
         var secretKey = jwtSettings["SecretKey"]
@@ -108,7 +105,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         var audience = jwtSettings["Audience"] ?? "IhsanAI";
         var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "15"); // Kısa ömürlü: 15 dakika
 
-        var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
+        var token = GenerateJwtToken(kullanici, yetki, secretKey, issuer, audience, expirationMinutes);
 
         // OPTIMIZASYON: Eğer token çok yeni oluşturulduysa (son 30 saniye), yeni token oluşturma
         // Sadece LastUsedAt'ı güncelle ve aynı token'ı dön (gereksiz kayıt şişmesini önler)
@@ -164,23 +161,9 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         };
     }
 
-    private static string DetermineRole(Domain.Entities.Yetki? yetki)
-    {
-        if (yetki == null) return "viewer";
-
-        return yetki.GorebilecegiPolicelerveKartlar switch
-        {
-            "1" => "admin",
-            "2" => "editor",
-            "3" => "viewer",
-            _ => "viewer"
-        };
-    }
-
     private string GenerateJwtToken(
         Domain.Entities.Kullanici kullanici,
         Domain.Entities.Yetki? yetki,
-        string role,
         string secretKey,
         string issuer,
         string audience,
@@ -195,13 +178,29 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             new(JwtRegisteredClaimNames.Email, kullanici.Email ?? string.Empty),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("name", $"{kullanici.Adi} {kullanici.Soyadi}".Trim()),
-            new("role", role),
             new("firmaId", kullanici.FirmaId?.ToString() ?? ""),
-            new("subeId", kullanici.SubeId?.ToString() ?? "")
+            new("subeId", kullanici.SubeId?.ToString() ?? ""),
+            new("anaYoneticimi", kullanici.AnaYoneticimi?.ToString() ?? "1") // 0=AnaYönetici, 1=Değil
         };
 
-        if (yetki != null)
+        // Yetki claim'lerini ekle (authorization policy'ler için gerekli)
+        // AnaYoneticimi = 0 ise (Firma Ana Yöneticisi), yetki tablosuna gerek yok - tüm yetkiler
+        if (kullanici.AnaYoneticimi == 0)
         {
+            // Ana Yönetici - Firma içinde tüm yetkiler
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", "1"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", "1"));
+            claims.Add(new Claim("policeDuzenleyebilsin", "1"));
+            claims.Add(new Claim("policeHavuzunuGorebilsin", "1"));
+            claims.Add(new Claim("policeAktarabilsin", "1"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", "1"));
+            claims.Add(new Claim("produktorleriGorebilsin", "1"));
+            claims.Add(new Claim("gorebilecegiPoliceler", "1")); // Firma yöneticisi seviyesinde
+            claims.Add(new Claim("kazanclarimGorebilsin", "1"));
+        }
+        else if (yetki != null)
+        {
+            // Normal kullanıcı - Yetki tablosundan al
             claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", yetki.YetkilerSayfasindaIslemYapabilsin ?? "0"));
             claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", yetki.AcenteliklerSayfasindaIslemYapabilsin ?? "0"));
             claims.Add(new Claim("policeDuzenleyebilsin", yetki.PoliceDuzenleyebilsin ?? "0"));
@@ -211,6 +210,19 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
             claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
             claims.Add(new Claim("kazanclarimGorebilsin", yetki.KazanclarimGorebilsin ?? "0"));
+        }
+        else
+        {
+            // Yetki yok ve Ana Yönetici de değil - Varsayılan minimum yetkiler
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", "0"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", "0"));
+            claims.Add(new Claim("policeDuzenleyebilsin", "0"));
+            claims.Add(new Claim("policeHavuzunuGorebilsin", "0"));
+            claims.Add(new Claim("policeAktarabilsin", "0"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", "0"));
+            claims.Add(new Claim("produktorleriGorebilsin", "0"));
+            claims.Add(new Claim("gorebilecegiPoliceler", "3")); // Sadece kendi poliçeleri
+            claims.Add(new Claim("kazanclarimGorebilsin", "0"));
         }
 
         var token = new JwtSecurityToken(

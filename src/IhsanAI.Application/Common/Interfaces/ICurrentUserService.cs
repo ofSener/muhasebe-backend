@@ -16,4 +16,10 @@ public interface ICurrentUserService
     /// GorebilecegiPoliceler = "1" olan kullanıcılar SuperAdmin sayılır.
     /// </summary>
     bool IsSuperAdmin { get; }
+
+    /// <summary>
+    /// Kullanıcı Ana Yönetici mi? (AnaYoneticimi = 0)
+    /// Ana yöneticiler tüm yetkilere sahiptir.
+    /// </summary>
+    bool IsAnaYonetici { get; }
 }

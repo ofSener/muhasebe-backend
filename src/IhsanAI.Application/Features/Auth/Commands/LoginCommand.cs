@@ -28,7 +28,6 @@ public record UserDto
     public int Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
-    public string Role { get; init; } = string.Empty;
     public int? FirmaId { get; init; }
     public int? SubeId { get; init; }
     public string? SubeAdi { get; init; }
@@ -146,9 +145,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             ? await _context.Subeler.FirstOrDefaultAsync(s => s.Id == kullanici.SubeId, cancellationToken)
             : null;
 
-        // Determine role based on permissions
-        var role = DetermineRole(yetki);
-
         // Generate JWT token
         var jwtSettings = _configuration.GetSection("Jwt");
         var secretKey = jwtSettings["SecretKey"] ?? "IhsanAI-Default-Secret-Key-For-Development-Only-32chars";
@@ -156,7 +152,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         var audience = jwtSettings["Audience"] ?? "IhsanAI";
         var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "120"); // Default 2 saat
 
-        var token = GenerateJwtToken(kullanici, yetki, role, secretKey, issuer, audience, expirationMinutes);
+        var token = GenerateJwtToken(kullanici, yetki, secretKey, issuer, audience, expirationMinutes);
         var refreshToken = GenerateRefreshToken();
 
         // Update user's last login
@@ -193,7 +189,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
                 Id = kullanici.Id,
                 Name = $"{kullanici.Adi} {kullanici.Soyadi}".Trim(),
                 Email = kullanici.Email ?? string.Empty,
-                Role = role,
                 FirmaId = kullanici.FirmaId,
                 SubeId = kullanici.SubeId,
                 SubeAdi = sube?.SubeAdi,
@@ -231,28 +226,9 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         };
     }
 
-    private static string DetermineRole(Domain.Entities.Yetki? yetki)
-    {
-        if (yetki == null) return "viewer";
-
-        // GorebilecegiPolicelerveKartlar:
-        // 1 = admin (Tüm kartları ve poliçeleri görebilir)
-        // 2 = editor (Sadece kendi şubesinin poliçelerini görür)
-        // 3 = viewer (Sadece kendi poliçelerini görür)
-        // 4 = restricted (Hiçbir poliçe göremez)
-        return yetki.GorebilecegiPolicelerveKartlar switch
-        {
-            "1" => "admin",
-            "2" => "editor",
-            "3" => "viewer",
-            _ => "viewer"
-        };
-    }
-
     private string GenerateJwtToken(
         Domain.Entities.Kullanici kullanici,
         Domain.Entities.Yetki? yetki,
-        string role,
         string secretKey,
         string issuer,
         string audience,
@@ -268,14 +244,29 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             new(JwtRegisteredClaimNames.Email, kullanici.Email ?? string.Empty),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("name", $"{kullanici.Adi} {kullanici.Soyadi}".Trim()),
-            new("role", role),
             new("firmaId", kullanici.FirmaId?.ToString() ?? ""),
-            new("subeId", kullanici.SubeId?.ToString() ?? "")
+            new("subeId", kullanici.SubeId?.ToString() ?? ""),
+            new("anaYoneticimi", kullanici.AnaYoneticimi?.ToString() ?? "1") // 0=AnaYönetici, 1=Değil
         };
 
         // Yetki claim'lerini ekle (authorization policy'ler için gerekli)
-        if (yetki != null)
+        // AnaYoneticimi = 0 ise (Firma Ana Yöneticisi), yetki tablosuna gerek yok - tüm yetkiler
+        if (kullanici.AnaYoneticimi == 0)
         {
+            // Ana Yönetici - Firma içinde tüm yetkiler
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", "1"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", "1"));
+            claims.Add(new Claim("policeDuzenleyebilsin", "1"));
+            claims.Add(new Claim("policeHavuzunuGorebilsin", "1"));
+            claims.Add(new Claim("policeAktarabilsin", "1"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", "1"));
+            claims.Add(new Claim("produktorleriGorebilsin", "1"));
+            claims.Add(new Claim("gorebilecegiPoliceler", "1")); // Firma yöneticisi seviyesinde
+            claims.Add(new Claim("kazanclarimGorebilsin", "1"));
+        }
+        else if (yetki != null)
+        {
+            // Normal kullanıcı - Yetki tablosundan al
             claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", yetki.YetkilerSayfasindaIslemYapabilsin ?? "0"));
             claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", yetki.AcenteliklerSayfasindaIslemYapabilsin ?? "0"));
             claims.Add(new Claim("policeDuzenleyebilsin", yetki.PoliceDuzenleyebilsin ?? "0"));
@@ -285,6 +276,19 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
             claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
             claims.Add(new Claim("kazanclarimGorebilsin", yetki.KazanclarimGorebilsin ?? "0"));
+        }
+        else
+        {
+            // Yetki yok ve Ana Yönetici de değil - Varsayılan minimum yetkiler
+            claims.Add(new Claim("yetkilerSayfasindaIslemYapabilsin", "0"));
+            claims.Add(new Claim("acenteliklerSayfasindaIslemYapabilsin", "0"));
+            claims.Add(new Claim("policeDuzenleyebilsin", "0"));
+            claims.Add(new Claim("policeHavuzunuGorebilsin", "0"));
+            claims.Add(new Claim("policeAktarabilsin", "0"));
+            claims.Add(new Claim("komisyonOranlariniDuzenleyebilsin", "0"));
+            claims.Add(new Claim("produktorleriGorebilsin", "0"));
+            claims.Add(new Claim("gorebilecegiPoliceler", "3")); // Sadece kendi poliçeleri
+            claims.Add(new Claim("kazanclarimGorebilsin", "0"));
         }
 
         var token = new JwtSecurityToken(

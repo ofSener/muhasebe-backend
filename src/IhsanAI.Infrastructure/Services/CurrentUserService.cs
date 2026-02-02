@@ -23,10 +23,24 @@ public class CurrentUserService : ICurrentUserService
     public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;
 
     /// <summary>
-    /// SuperAdmin kontrolü - şimdilik false, gerekirse özel bir claim eklenebilir.
-    /// GorebilecegiPoliceler = "1" firma yöneticisi demek, SuperAdmin değil.
+    /// SuperAdmin kontrolü - şu an için false.
+    /// Gelecekte tüm firmaları görebilen bir süper admin rolü eklenebilir.
     /// </summary>
-    public bool IsSuperAdmin => false; // TODO: Gerekirse özel bir superAdmin claim'i eklenebilir
+    public bool IsSuperAdmin => false;
+
+    /// <summary>
+    /// Ana Yönetici kontrolü - AnaYoneticimi = 0 olan kullanıcılar.
+    /// Ana yöneticiler KENDI FİRMASININ tüm verilerine erişebilir.
+    /// Firma filtresi uygulanır, ama şube ve yetki filtreleri bypass edilir.
+    /// </summary>
+    public bool IsAnaYonetici
+    {
+        get
+        {
+            var anaYoneticimi = _httpContextAccessor.HttpContext?.User?.FindFirst("anaYoneticimi")?.Value;
+            return anaYoneticimi == "0"; // 0 ise Firma Ana Yöneticisi
+        }
+    }
 
     private int? GetClaimAsInt(string claimType)
     {
