@@ -91,9 +91,17 @@ public abstract class BaseExcelParser : IExcelParser
         if (string.IsNullOrEmpty(name)) return string.Empty;
 
         // Türkçe karakterleri dönüştür ve küçük harfe çevir
+        // Önce büyük Türkçe karakterleri küçük harfe çevir (ToLowerInvariant bazılarını düzgün çevirmiyor)
         return name
+            .Replace("İ", "i")  // Büyük İ (U+0130) - ToLowerInvariant düzgün çevirmiyor
+            .Replace("I", "i")  // Normal büyük I
+            .Replace("Ğ", "g")
+            .Replace("Ü", "u")
+            .Replace("Ş", "s")
+            .Replace("Ö", "o")
+            .Replace("Ç", "c")
             .ToLowerInvariant()
-            .Replace("ı", "i")
+            .Replace("ı", "i")  // Küçük ı (U+0131)
             .Replace("ğ", "g")
             .Replace("ü", "u")
             .Replace("ş", "s")
@@ -102,6 +110,7 @@ public abstract class BaseExcelParser : IExcelParser
             .Replace(" ", "")
             .Replace("_", "")
             .Replace("-", "")
+            .Replace("/", "")  // Slash'ları da kaldır
             .Trim();
     }
 
@@ -198,9 +207,27 @@ public abstract class BaseExcelParser : IExcelParser
 
             if (key != null && row.TryGetValue(key, out var value) && value != null)
             {
-                // DateTime olarak gelmiş olabilir
+                // DateTime olarak gelmiş olabilir (ClosedXML)
                 if (value is DateTime dt)
                     return dt;
+
+                // EPPlus tarih değerlerini Double (OLE Automation date) olarak döndürür
+                if (value is double d)
+                {
+                    try
+                    {
+                        // OLE Automation date: 1 Ocak 1900'den itibaren gün sayısı
+                        // Geçerli tarih aralığı kontrolü (1900-2100 arası)
+                        if (d > 1 && d < 73050) // 73050 = 2100-01-01
+                        {
+                            return DateTime.FromOADate(d);
+                        }
+                    }
+                    catch
+                    {
+                        // Geçersiz OLE date, string olarak dene
+                    }
+                }
 
                 var strValue = value.ToString()?.Trim();
                 if (string.IsNullOrWhiteSpace(strValue)) continue;
@@ -215,7 +242,9 @@ public abstract class BaseExcelParser : IExcelParser
                     "dd/MM/yyyy HH:mm:ss",
                     "yyyy-MM-dd HH:mm:ss",
                     "d.M.yyyy",
-                    "d/M/yyyy"
+                    "d/M/yyyy",
+                    "M/d/yyyy",
+                    "M/d/yyyy h:mm:ss tt"
                 };
 
                 if (DateTime.TryParseExact(strValue, formats, CultureInfo.InvariantCulture,
