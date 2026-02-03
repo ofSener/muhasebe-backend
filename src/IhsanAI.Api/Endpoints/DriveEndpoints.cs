@@ -141,7 +141,7 @@ public static class DriveEndpoints
         .WithName("UploadToDriveExternal")
         .WithDescription("Harici sistemlerden PDF yuklemek icin (firmaId query parametresi ile)")
         .DisableAntiforgery()
-        .AllowAnonymous();
+        .RequireAuthorization("CanAccessDriveIntegration");
 
         // OAuth callback - Anonymous (no auth required for Google redirect)
         app.MapGet("/api/drive/oauth/callback", async (HttpContext httpContext, string code, string state, IMediator mediator, IConfiguration configuration) =>

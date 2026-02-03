@@ -10,7 +10,7 @@ public static class ExcelImportEndpoints
     {
         var group = app.MapGroup("/api/excel-import")
             .WithTags("Excel Import")
-            .RequireAuthorization();
+            .RequireAuthorization("CanImportPolicies");
 
         // POST - Upload and parse Excel file
         group.MapPost("/upload", async (IFormFile file, int? sigortaSirketiId, IMediator mediator) =>

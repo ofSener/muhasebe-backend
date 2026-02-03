@@ -196,16 +196,21 @@ public record GetPoliceByIdQuery(int Id) : IRequest<Police?>;
 public class GetPoliceByIdQueryHandler : IRequestHandler<GetPoliceByIdQuery, Police?>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetPoliceByIdQueryHandler(IApplicationDbContext context)
+    public GetPoliceByIdQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Police?> Handle(GetPoliceByIdQuery request, CancellationToken cancellationToken)
     {
         return await _context.Policeler
             .AsNoTracking()
+            .ApplyAuthorizationFilters(_currentUserService)
             .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
     }
 }

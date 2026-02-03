@@ -10,10 +10,14 @@ public record GetKullanicilarQuery(int? FirmaId = null, int? Limit = null) : IRe
 public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery, List<KullaniciListDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetKullanicilarQueryHandler(IApplicationDbContext context)
+    public GetKullanicilarQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<KullaniciListDto>> Handle(GetKullanicilarQuery request, CancellationToken cancellationToken)
@@ -23,9 +27,11 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         // ========== AKTİF KULLANICILAR ==========
         var aktifQuery = _context.Kullanicilar.AsQueryable();
 
-        if (request.FirmaId.HasValue)
+        // Use FirmaId from current user's JWT claims instead of trusting client parameter
+        var firmaId = _currentUserService.FirmaId;
+        if (firmaId.HasValue)
         {
-            aktifQuery = aktifQuery.Where(x => x.FirmaId == request.FirmaId.Value);
+            aktifQuery = aktifQuery.Where(x => x.FirmaId == firmaId.Value);
         }
 
         var aktifKullanicilar = await (
@@ -59,9 +65,10 @@ public class GetKullanicilarQueryHandler : IRequestHandler<GetKullanicilarQuery,
         // ========== ESKİ KULLANICILAR ==========
         var eskiQuery = _context.KullanicilarEski.AsQueryable();
 
-        if (request.FirmaId.HasValue)
+        // Use FirmaId from current user's JWT claims
+        if (firmaId.HasValue)
         {
-            eskiQuery = eskiQuery.Where(x => x.FirmaId == request.FirmaId.Value);
+            eskiQuery = eskiQuery.Where(x => x.FirmaId == firmaId.Value);
         }
 
         var eskiKullanicilar = await (
@@ -176,10 +183,14 @@ public record GetAktifKullanicilarQuery(int? FirmaId = null, int? Limit = null) 
 public class GetAktifKullanicilarQueryHandler : IRequestHandler<GetAktifKullanicilarQuery, List<AktifKullaniciDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetAktifKullanicilarQueryHandler(IApplicationDbContext context)
+    public GetAktifKullanicilarQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<AktifKullaniciDto>> Handle(GetAktifKullanicilarQuery request, CancellationToken cancellationToken)
@@ -187,9 +198,11 @@ public class GetAktifKullanicilarQueryHandler : IRequestHandler<GetAktifKullanic
         var query = _context.Kullanicilar
             .Where(x => x.Onay == 1); // Sadece aktif kullanıcılar
 
-        if (request.FirmaId.HasValue)
+        // Use FirmaId from current user's JWT claims
+        var firmaId = _currentUserService.FirmaId;
+        if (firmaId.HasValue)
         {
-            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+            query = query.Where(x => x.FirmaId == firmaId.Value);
         }
 
         var result = query
@@ -230,19 +243,25 @@ public record SearchProducersQuery(string Name, int? FirmaId = null, int Limit =
 public class SearchProducersQueryHandler : IRequestHandler<SearchProducersQuery, List<ProducerSearchDto>>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
 
-    public SearchProducersQueryHandler(IApplicationDbContext context)
+    public SearchProducersQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUserService)
     {
         _context = context;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<ProducerSearchDto>> Handle(SearchProducersQuery request, CancellationToken cancellationToken)
     {
         var query = _context.Kullanicilar.AsQueryable();
 
-        if (request.FirmaId.HasValue)
+        // Use FirmaId from current user's JWT claims
+        var firmaId = _currentUserService.FirmaId;
+        if (firmaId.HasValue)
         {
-            query = query.Where(x => x.FirmaId == request.FirmaId.Value);
+            query = query.Where(x => x.FirmaId == firmaId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Name))

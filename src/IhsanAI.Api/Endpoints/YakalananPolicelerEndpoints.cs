@@ -10,7 +10,7 @@ public static class YakalananPolicelerEndpoints
     {
         var group = app.MapGroup("/api/policies/captured")
             .WithTags("Captured Policies")
-            .RequireAuthorization();
+            .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapGet("/", async (
             DateTime? startDate,

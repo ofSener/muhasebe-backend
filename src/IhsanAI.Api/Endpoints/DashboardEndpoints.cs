@@ -24,7 +24,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetDashboardStats")
-        .WithDescription("Dashboard ana istatistiklerini getirir. mode=0: Onaylı Poliçeler, mode=1: Yakalanan Poliçeler");
+        .WithDescription("Dashboard ana istatistiklerini getirir. mode=0: Onaylı Poliçeler, mode=1: Yakalanan Poliçeler")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         // Branş dağılımı
         group.MapGet("/brans-dagilim", async (
@@ -43,7 +44,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetBransDagilim")
-        .WithDescription("Branşlara göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan");
+        .WithDescription("Branşlara göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         // Aylık trend
         group.MapGet("/aylik-trend", async (
@@ -56,7 +58,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetAylikTrend")
-        .WithDescription("Aylık prim ve poliçe trendini getirir. mode=0: Onaylı, mode=1: Yakalanan");
+        .WithDescription("Aylık prim ve poliçe trendini getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         // Top performansçılar
         group.MapGet("/top-performers", async (
@@ -76,7 +79,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetTopPerformers")
-        .WithDescription("En yüksek prim yapan çalışanları getirir. mode=0: Onaylı, mode=1: Yakalanan");
+        .WithDescription("En yüksek prim yapan çalışanları getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         // Son aktiviteler
         group.MapGet("/son-aktiviteler", async (
@@ -96,7 +100,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetSonAktiviteler")
-        .WithDescription("Son eklenen poliçeleri getirir. mode=0: Onaylı, mode=1: Yakalanan");
+        .WithDescription("Son eklenen poliçeleri getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         // Sigorta şirketi dağılımı
         group.MapGet("/sirket-dagilim", async (
@@ -116,7 +121,8 @@ public static class DashboardEndpoints
             return Results.Ok(result);
         })
         .WithName("GetSirketDagilim")
-        .WithDescription("Sigorta şirketlerine göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan");
+        .WithDescription("Sigorta şirketlerine göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
 
         return app;
     }

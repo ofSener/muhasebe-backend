@@ -18,7 +18,8 @@ public static class MusterilerEndpoints
             return Results.Ok(result);
         })
         .WithName("GetMusteriler")
-        .WithDescription("Müşterileri listeler");
+        .WithDescription("Müşterileri listeler")
+        .RequireAuthorization("CanViewCustomers");
 
         group.MapGet("/stats", async (IMediator mediator) =>
         {
@@ -26,7 +27,8 @@ public static class MusterilerEndpoints
             return Results.Ok(result);
         })
         .WithName("GetCustomerStats")
-        .WithDescription("Müşteri istatistiklerini getirir");
+        .WithDescription("Müşteri istatistiklerini getirir")
+        .RequireAuthorization("CanViewCustomers");
 
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
@@ -34,7 +36,8 @@ public static class MusterilerEndpoints
             return result is not null ? Results.Ok(result) : Results.NotFound();
         })
         .WithName("GetMusteriById")
-        .WithDescription("ID'ye göre müşteri getirir");
+        .WithDescription("ID'ye göre müşteri getirir")
+        .RequireAuthorization("CanViewCustomerDetail");
 
         group.MapGet("/search", async (string name, int? ekleyenFirmaId, int? limit, IMediator mediator) =>
         {
@@ -42,7 +45,8 @@ public static class MusterilerEndpoints
             return Results.Ok(result);
         })
         .WithName("SearchCustomers")
-        .WithDescription("Müşteri arama");
+        .WithDescription("Müşteri arama")
+        .RequireAuthorization("CanViewCustomers");
 
         group.MapPost("/", async (CreateCustomerCommand command, IMediator mediator) =>
         {
