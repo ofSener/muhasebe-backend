@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.Features.Policeler.Queries;
+using IhsanAI.Application.Features.YakalananPoliceler.Queries;
 
 namespace IhsanAI.Application.Features.Dashboard.Queries;
 
@@ -104,6 +106,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
     {
         var query = _context.Policeler
             .Where(p => p.OnayDurumu == 1)
+            .ApplyAuthorizationFilters(_currentUserService)
             .Where(p => p.TanzimTarihi >= startDate && p.TanzimTarihi <= endDate);
 
         if (firmaId.HasValue)
@@ -174,6 +177,7 @@ public class GetBransDagilimQueryHandler : IRequestHandler<GetBransDagilimQuery,
         CancellationToken cancellationToken)
     {
         var query = _context.YakalananPoliceler
+            .ApplyAuthorizationFilters(_currentUserService)
             .Where(y => y.TanzimTarihi >= startDate && y.TanzimTarihi <= endDate);
 
         if (firmaId.HasValue)

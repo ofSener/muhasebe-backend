@@ -114,7 +114,9 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
         var toplamMusteriSayisi = await musteriQuery.CountAsync(cancellationToken);
 
         // Bekleyen (havuzdaki) poliçeler (OnayDurumu = 0)
-        var bekleyenQuery = _context.Policeler.Where(p => p.OnayDurumu == 0);
+        var bekleyenQuery = _context.Policeler
+            .Where(p => p.OnayDurumu == 0)
+            .ApplyAuthorizationFilters(_currentUserService);
         if (firmaId.HasValue)
         {
             bekleyenQuery = bekleyenQuery.Where(p => p.FirmaId == firmaId.Value);

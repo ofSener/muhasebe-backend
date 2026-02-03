@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
+using IhsanAI.Application.Features.Policeler.Queries;
+using IhsanAI.Application.Features.YakalananPoliceler.Queries;
 
 namespace IhsanAI.Application.Features.Dashboard.Queries;
 
@@ -75,7 +77,9 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         DashboardFilters filters,
         CancellationToken cancellationToken)
     {
-        var policeQuery = _context.Policeler.Where(p => p.OnayDurumu == 1);
+        var policeQuery = _context.Policeler
+            .Where(p => p.OnayDurumu == 1)
+            .ApplyAuthorizationFilters(_currentUserService);
         if (firmaId.HasValue)
         {
             policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
@@ -181,7 +185,9 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
         DashboardFilters filters,
         CancellationToken cancellationToken)
     {
-        var yakalamaQuery = _context.YakalananPoliceler.AsQueryable();
+        var yakalamaQuery = _context.YakalananPoliceler
+            .AsQueryable()
+            .ApplyAuthorizationFilters(_currentUserService);
         if (firmaId.HasValue)
         {
             yakalamaQuery = yakalamaQuery.Where(y => y.FirmaId == firmaId.Value);
