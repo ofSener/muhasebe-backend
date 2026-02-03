@@ -33,4 +33,9 @@ public interface IExcelImportService
     /// Dosya adından sigorta şirketini tespit eder
     /// </summary>
     int? DetectSigortaSirketiFromFileName(string fileName);
+
+    /// <summary>
+    /// Dosya adı ve header kolonlarından format tespit eder (upload öncesi hızlı tespit)
+    /// </summary>
+    Task<DetectFormatResultDto> DetectFormatFromHeadersAsync(string fileName, List<string> headers);
 }

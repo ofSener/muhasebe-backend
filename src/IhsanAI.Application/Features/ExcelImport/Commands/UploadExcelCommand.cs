@@ -41,7 +41,11 @@ public class UploadExcelCommandHandler : IRequestHandler<UploadExcelCommand, Exc
             throw new ArgumentException("Dosya boyutu 50MB'ı aşamaz.");
         }
 
-        using var stream = request.File.OpenReadStream();
-        return await _excelImportService.ParseExcelAsync(stream, request.File.FileName, request.SigortaSirketiId);
+        // Stream'i MemoryStream'e kopyala (IFormFile stream'i birden fazla kez okunamaz)
+        using var memoryStream = new MemoryStream();
+        await request.File.CopyToAsync(memoryStream, cancellationToken);
+        memoryStream.Position = 0;
+
+        return await _excelImportService.ParseExcelAsync(memoryStream, request.File.FileName, request.SigortaSirketiId);
     }
 }

@@ -1,6 +1,7 @@
 using MediatR;
 using IhsanAI.Application.Features.ExcelImport.Commands;
 using IhsanAI.Application.Features.ExcelImport.Queries;
+using IhsanAI.Application.Features.ExcelImport.Dtos;
 
 namespace IhsanAI.Api.Endpoints;
 
@@ -69,9 +70,19 @@ public static class ExcelImportEndpoints
         .WithName("GetImportHistory")
         .WithDescription("Import geçmişini listeler");
 
+        // POST - Detect format from headers (upload oncesi hizli tespit)
+        group.MapPost("/detect-format", async (DetectFormatRequest request, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new DetectFormatQuery(request.FileName, request.Headers));
+            return Results.Ok(result);
+        })
+        .WithName("DetectFormat")
+        .WithDescription("Dosya adi ve header kolonlarindan format tespit eder");
+
         return app;
     }
 }
 
 public record ConfirmImportRequest(string SessionId);
 public record ConfirmBatchRequest(string SessionId, int Skip, int Take);
+public record DetectFormatRequest(string FileName, List<string> Headers);

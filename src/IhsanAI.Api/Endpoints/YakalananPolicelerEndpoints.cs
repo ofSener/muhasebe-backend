@@ -123,6 +123,60 @@ public static class YakalananPolicelerEndpoints
         .WithName("ApproveCapturedPolicy")
         .WithDescription("Yakalanan poliçeyi direkt olarak poliçeler tablosuna kaydet (havuzu bypass et)");
 
+        // POST - Create new yakalanan police
+        group.MapPost("/", async (CreateYakalananPoliceRequest request, IMediator mediator) =>
+        {
+            var command = new CreateYakalananPoliceCommand
+            {
+                SigortaSirketi = request.SigortaSirketi,
+                PoliceTuru = request.PoliceTuru,
+                PoliceNumarasi = request.PoliceNumarasi,
+                Plaka = request.Plaka ?? string.Empty,
+                TanzimTarihi = request.TanzimTarihi,
+                BaslangicTarihi = request.BaslangicTarihi,
+                BitisTarihi = request.BitisTarihi,
+                BrutPrim = request.BrutPrim,
+                NetPrim = request.NetPrim,
+                SigortaliAdi = request.SigortaliAdi,
+                MusteriId = request.MusteriId,
+                CepTelefonu = request.CepTelefonu,
+                DisPolice = request.DisPolice,
+                AcenteAdi = request.AcenteAdi,
+                AcenteNo = request.AcenteNo,
+                Aciklama = request.Aciklama
+            };
+
+            var result = await mediator.Send(command);
+
+            if (result.Success)
+            {
+                return Results.Ok(new { success = true, id = result.Id });
+            }
+
+            return Results.BadRequest(new { success = false, error = result.Error });
+        })
+        .WithName("CreateYakalananPolice")
+        .WithDescription("Yeni yakalanan police kaydı oluşturur ve ID döner");
+
         return app;
     }
 }
+
+public record CreateYakalananPoliceRequest(
+    int SigortaSirketi,
+    int PoliceTuru,
+    string PoliceNumarasi,
+    string? Plaka,
+    DateTime TanzimTarihi,
+    DateTime BaslangicTarihi,
+    DateTime BitisTarihi,
+    float BrutPrim,
+    float NetPrim,
+    string? SigortaliAdi,
+    int? MusteriId,
+    int? CepTelefonu,
+    sbyte? DisPolice,
+    string? AcenteAdi,
+    string? AcenteNo,
+    string? Aciklama
+);

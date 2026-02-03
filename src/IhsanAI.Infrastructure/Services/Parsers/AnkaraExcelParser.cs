@@ -5,43 +5,30 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// <summary>
 /// Ankara Sigorta Excel parser
 ///
-/// KOLONLAR (27 kolon):
-/// Col 1:  Ürün No
-/// Col 2:  Ürün                    (Ürün adı - detaylı)
-/// Col 3:  Branş                   (DASK, KASKO, TRAFİK, SAĞLIK, vb.)
-/// Col 4:  Poliçe No
-/// Col 5:  Yenileme No
-/// Col 6:  Zeyil No
-/// Col 7:  Zeyil Türü
-/// Col 8:  Tahakkuk / İptal
-/// Col 9:  Brüt Prim ₺             (TL cinsinden - dövizli değil)
-/// Col 10: Net Prim ₺
-/// Col 11: Brüt Prim               (Döviz cinsinden)
-/// Col 12: Net Prim
-/// Col 13: Döviz Cinsi
-/// Col 14: Komisyon ₺
-/// Col 15: Vergiler ₺
-/// Col 16: Zeyil Onay Tarihi       (DateTime)
-/// Col 17: Zeyil Başlangıç Tarihi  (DateTime)
-/// Col 18: Poliçe Onay Tarihi      (DateTime)
-/// Col 19: Poliçe Başlangıç Tarihi (DateTime)
-/// Col 20: Poliçe Bitiş Tarihi     (DateTime)
-/// Col 21: Müşteri No
-/// Col 22: Sigortalı No
-/// Col 23: Sigortalı Adı / Ünvanı
-/// Col 24: Plaka
-/// Col 25: Trafik / Kasko Basamak
-/// Col 26: Partaj
-/// Col 27: Partaj Adı
+/// İki farklı format desteklenir:
+///
+/// FORMAT 1 - Zeyilli Format (27 kolon):
+/// Ürün No, Ürün, Branş, Poliçe No, Yenileme No, Zeyil No, Zeyil Türü,
+/// Tahakkuk / İptal, Brüt Prim ₺, Net Prim ₺, Brüt Prim, Net Prim, Döviz Cinsi,
+/// Komisyon ₺, Vergiler ₺, Zeyil Onay Tarihi, Zeyil Başlangıç Tarihi,
+/// Poliçe Onay Tarihi, Poliçe Başlangıç Tarihi, Poliçe Bitiş Tarihi,
+/// Müşteri No, Sigortalı No, Sigortalı Adı / Ünvanı, Plaka,
+/// Trafik / Kasko Basamak, Partaj, Partaj Adı
+///
+/// FORMAT 2 - Zeyilsiz Format (27 kolon):
+/// Ürün No, Ürün, Branş, Poliçe No, Yenileme No, Tahakkuk / İptal,
+/// Brüt Prim ₺, Net Prim ₺, Brüt Prim, Net Prim, Döviz Cinsi, Komisyon ₺,
+/// Poliçe Onay Tarihi, Son İşlem Tarihi, Poliçe Başlangıç Tarihi,
+/// Poliçe Bitiş Tarihi, İptal Tarihi, Müşteri No, Sigortalı No,
+/// Sigortalı Adı / Ünvanı, Plaka, Trafik / Kasko Basamak, Partaj, Partaj Adı,
+/// Poliçe İptal Gerekçesi, Komisyon Gizle
+///
+/// NOT: İptal satırlarında prim ve komisyon değerleri pozitif gelebilir.
+/// Bu durumda otomatik olarak negatife çevrilir.
 ///
 /// BRANŞ → BransId:
-/// TRAFİK → 0 (Trafik)
-/// KASKO → 1 (Kasko)
-/// DASK → 2 (DASK)
-/// GENEL KAZA → 3 (Ferdi Kaza)
-/// SAĞLIK → 7 (Sağlık)
-/// TAMAMLAYICI SAĞLIK → 16 (Tamamlayıcı Sağlık)
-/// YABANCI SAĞLIK → 15 (Yabancı Sağlık)
+/// TRAFİK → 0, KASKO → 1, DASK → 2, GENEL KAZA → 3, SAĞLIK → 7,
+/// SEYAHAT → 8, IMM → 12, YABANCI SAĞLIK → 15, TAMAMLAYICI SAĞLIK → 16
 /// </summary>
 public class AnkaraExcelParser : BaseExcelParser
 {
@@ -92,6 +79,25 @@ public class AnkaraExcelParser : BaseExcelParser
             // Başlangıç: Önce Zeyil Başlangıç, yoksa Poliçe Başlangıç
             var baslangicTarihi = zeyilBaslangicTarihi ?? policeBaslangicTarihi;
 
+            // Önce poliçe tipini belirle (İptal mi Tahakkuk mu)
+            var policeTipi = GetPoliceTipi(row);
+
+            // Primler - TL cinsinden (₺ kolonları)
+            var brutPrim = GetDecimalValue(row, "Brüt Prim ₺", "Brüt Prim ?");
+            var netPrim = GetDecimalValue(row, "Net Prim ₺", "Net Prim ?");
+            var komisyon = GetDecimalValue(row, "Komisyon ₺", "Komisyon ?");
+
+            // İptal satırlarında pozitif değerleri negatife çevir
+            if (policeTipi == "İPTAL")
+            {
+                if (brutPrim.HasValue && brutPrim.Value > 0)
+                    brutPrim = -brutPrim.Value;
+                if (netPrim.HasValue && netPrim.Value > 0)
+                    netPrim = -netPrim.Value;
+                if (komisyon.HasValue && komisyon.Value > 0)
+                    komisyon = -komisyon.Value;
+            }
+
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
@@ -103,7 +109,7 @@ public class AnkaraExcelParser : BaseExcelParser
                 ZeyilTipKodu = GetStringValue(row, "Zeyil Türü", "Zeyil Turu"),
                 Brans = bransAdi,
                 BransId = bransId,
-                PoliceTipi = GetPoliceTipi(row),
+                PoliceTipi = policeTipi,
 
                 // Tarihler
                 TanzimTarihi = tanzimTarihi,
@@ -112,10 +118,10 @@ public class AnkaraExcelParser : BaseExcelParser
                 ZeyilOnayTarihi = zeyilOnayTarihi,
                 ZeyilBaslangicTarihi = zeyilBaslangicTarihi,
 
-                // Primler - TL cinsinden (₺ kolonları)
-                BrutPrim = GetDecimalValue(row, "Brüt Prim ₺", "Brüt Prim ?"),
-                NetPrim = GetDecimalValue(row, "Net Prim ₺", "Net Prim ?"),
-                Komisyon = GetDecimalValue(row, "Komisyon ₺", "Komisyon ?"),
+                // Primler (iptal için negatife çevrilmiş olabilir)
+                BrutPrim = brutPrim,
+                NetPrim = netPrim,
+                Komisyon = komisyon,
 
                 // Müşteri Bilgileri
                 SigortaliAdi = GetStringValue(row, "Sigortalı Adı / Ünvanı", "Sigortali Adi / Unvani")?.Trim(),
@@ -246,9 +252,11 @@ public class AnkaraExcelParser : BaseExcelParser
         if (!row.BaslangicTarihi.HasValue)
             errors.Add("Poliçe Başlangıç Tarihi geçersiz");
 
-        // Zeyil kontrolü - zeyillerde 0 veya negatif prim olabilir
+        // İptal veya Zeyil ise negatif/sıfır prim kabul edilir
+        var isIptal = row.PoliceTipi == "İPTAL";
         var isZeyil = IsZeyilPolicy(row.ZeyilNo);
-        if (!isZeyil && (!row.BrutPrim.HasValue || row.BrutPrim == 0))
+
+        if (!isIptal && !isZeyil && (!row.BrutPrim.HasValue || row.BrutPrim == 0))
             errors.Add("Brüt Prim boş veya sıfır");
 
         return errors;

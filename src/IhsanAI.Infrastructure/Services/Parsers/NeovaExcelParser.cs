@@ -32,21 +32,31 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Col 23: FAALİYET KODU
 /// Col 24-27: BİLGİ1-4          - Ek bilgiler (plaka vb.)
 ///
-/// BRANŞ KODLARI:
-/// K11, K18, K23    = Kasko
-/// TR4, TR6         = Trafik
-/// DSK              = DASK
-/// TS1, TS3, TSS    = Ticari Sigorta
-/// S47, S50, SG1    = Sağlık
-/// Y02, Y06         = Yangın
-/// YI1, YI2         = İşyeri
-/// YK1, YK2         = Konut
+/// BRANŞ KODLARI → BransId:
+/// K11              = Kasko (1)
+/// K18              = IMM (12)
+/// K23              = Kasko (1)
+/// TR4, TR6         = Trafik (0)
+/// DSK              = DASK (2)
+/// TS1, TS3         = Tarım (20)
+/// TSS              = Tamamlayıcı Sağlık (16)
+/// S47              = Ferdi Kaza (3)
+/// S50              = Tehlikeli Madde (31)
+/// SG1              = Seyahat Sağlık (8)
+/// Y02, Y06         = Yangın (21)
+/// YI1, YI2         = Yangın (21)
+/// YK1              = Konut (5)
+/// YK2              = Yangın (21)
 /// </summary>
 public class NeovaExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 93;
     public override string SirketAdi => "Neova Sigorta";
     public override string[] FileNamePatterns => new[] { "neova", "nva" };
+
+    // Neova Excel'lerinde header satırı genellikle 8. satırda
+    // (İlk 7 satır rapor başlığı, tarih aralığı vb. bilgiler içerir)
+    public override int? HeaderRowIndex => 8;
 
     protected override string[] RequiredColumns => new[]
     {
@@ -73,7 +83,8 @@ public class NeovaExcelParser : BaseExcelParser
             if (ptr != "P")
                 continue;
 
-            var policeNo = GetStringValue(row, "POLİÇE NO", "POLICE NO", "PoliceNo");
+            // POLİÇE NO - exact match kullan (ESKİ POLİÇE NO ile karışmaması için)
+            var policeNo = GetExactColumnValue(row, "POLİÇE NO", "POLICE NO", "PoliceNo");
 
             // Toplam satırlarını atla
             if (string.IsNullOrWhiteSpace(policeNo) ||
@@ -177,36 +188,46 @@ public class NeovaExcelParser : BaseExcelParser
 
         return kod switch
         {
-            // Kasko türleri
-            "K11" or "K18" or "K23" => "KASKO",
+            // Kasko
+            "K11" or "K23" => "KASKO",
 
-            // Trafik türleri
+            // IMM
+            "K18" => "IMM",
+
+            // Trafik
             "TR4" or "TR6" => "TRAFİK",
 
             // DASK
             "DSK" => "DASK",
 
-            // Ticari Sigortalar
-            "TS1" or "TS3" or "TSS" => "TİCARİ SİGORTA",
+            // Tarım
+            "TS1" or "TS3" => "TARIM",
 
-            // Sağlık türleri
-            "S47" or "S50" or "SG1" => "SAĞLIK",
+            // Tamamlayıcı Sağlık
+            "TSS" => "TAMAMLAYICI SAĞLIK",
 
-            // Yangın türleri
-            "Y02" or "Y06" => "YANGIN",
+            // Ferdi Kaza
+            "S47" => "FERDİ KAZA",
 
-            // İşyeri türleri
-            "YI1" or "YI2" => "İŞYERİ",
+            // Tehlikeli Madde
+            "S50" => "TEHLİKELİ MADDE",
 
-            // Konut türleri
-            "YK1" or "YK2" => "KONUT",
+            // Seyahat Sağlık
+            "SG1" => "SEYAHAT SAĞLIK",
 
-            // Genel eşleştirmeler
+            // Yangın
+            "Y02" or "Y06" or "YI1" or "YI2" or "YK2" => "YANGIN",
+
+            // Konut
+            "YK1" => "KONUT",
+
+            // Genel eşleştirmeler (bilinmeyen kodlar için)
             var x when x.StartsWith("K") => "KASKO",
             var x when x.StartsWith("TR") => "TRAFİK",
-            var x when x.StartsWith("TS") => "TİCARİ SİGORTA",
-            var x when x.StartsWith("S") => "SAĞLIK",
-            var x when x.StartsWith("YI") => "İŞYERİ",
+            var x when x.StartsWith("TS") => "TARIM",
+            var x when x.StartsWith("SG") => "SEYAHAT SAĞLIK",
+            var x when x.StartsWith("S") => "FERDİ KAZA",
+            var x when x.StartsWith("YI") => "YANGIN",
             var x when x.StartsWith("YK") => "KONUT",
             var x when x.StartsWith("Y") => "YANGIN",
 
@@ -227,38 +248,48 @@ public class NeovaExcelParser : BaseExcelParser
 
         return kod switch
         {
-            // Kasko türleri -> ID: 1
-            "K11" or "K18" or "K23" => 1,
-            var x when x.StartsWith("K") => 1,
+            // Kasko -> ID: 1
+            "K11" or "K23" => 1,
 
-            // Trafik türleri -> ID: 0
+            // IMM -> ID: 12
+            "K18" => 12,
+
+            // Trafik -> ID: 0
             "TR4" or "TR6" => 0,
-            var x when x.StartsWith("TR") => 0,
 
             // DASK -> ID: 2
             "DSK" => 2,
 
-            // Ticari Sigortalar (Kasko gibi değerlendir) -> ID: 1
-            "TS1" or "TS3" or "TSS" => 1,
-            var x when x.StartsWith("TS") => 1,
+            // Tarım -> ID: 20
+            "TS1" or "TS3" => 20,
 
-            // Sağlık türleri -> ID: 7
-            "S47" or "S50" or "SG1" => 7,
-            var x when x.StartsWith("S") => 7,
+            // Tamamlayıcı Sağlık -> ID: 16
+            "TSS" => 16,
 
-            // Yangın türleri -> ID: 21
-            "Y02" or "Y06" => 21,
+            // Ferdi Kaza -> ID: 3
+            "S47" => 3,
 
-            // İşyeri türleri -> ID: 9
-            "YI1" or "YI2" => 9,
-            var x when x.StartsWith("YI") => 9,
+            // Tehlikeli Madde -> ID: 31
+            "S50" => 31,
 
-            // Konut türleri -> ID: 5
-            "YK1" or "YK2" => 5,
-            var x when x.StartsWith("YK") => 5,
+            // Seyahat Sağlık -> ID: 8
+            "SG1" => 8,
 
-            // Y ile başlayan diğerleri -> Yangın ID: 21
-            var x when x.StartsWith("Y") => 21,
+            // Yangın -> ID: 21
+            "Y02" or "Y06" or "YI1" or "YI2" or "YK2" => 21,
+
+            // Konut -> ID: 5
+            "YK1" => 5,
+
+            // Genel eşleştirmeler (bilinmeyen kodlar için)
+            var x when x.StartsWith("K") => 1,      // Kasko
+            var x when x.StartsWith("TR") => 0,     // Trafik
+            var x when x.StartsWith("TS") => 20,    // Tarım
+            var x when x.StartsWith("SG") => 8,     // Seyahat Sağlık
+            var x when x.StartsWith("S") => 3,      // Ferdi Kaza
+            var x when x.StartsWith("YI") => 21,    // Yangın
+            var x when x.StartsWith("YK") => 5,     // Konut
+            var x when x.StartsWith("Y") => 21,     // Yangın
 
             _ => 255  // Bilinmeyen
         };
@@ -458,9 +489,11 @@ public class NeovaExcelParser : BaseExcelParser
         if (!row.BaslangicTarihi.HasValue)
             errors.Add("Başlangıç Tarihi geçersiz");
 
-        // Zeyil kontrolü - zeyillerde 0 veya negatif prim olabilir
+        // İptal veya Zeyil satırlarında 0/negatif prim kabul edilir
+        var isIptal = row.PoliceTipi == "İPTAL";
         var isZeyil = IsZeyilPolicy(row.ZeyilNo);
-        if (!isZeyil && (!row.BrutPrim.HasValue || row.BrutPrim == 0))
+
+        if (!isIptal && !isZeyil && (!row.BrutPrim.HasValue || row.BrutPrim == 0))
             errors.Add("Brüt Prim boş veya sıfır");
 
         return errors;

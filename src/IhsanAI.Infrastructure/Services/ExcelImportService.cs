@@ -79,7 +79,29 @@ public class ExcelImportService : IExcelImportService
             // 1. Explicit sigorta şirketi ID'si verilmişse onu kullan
             if (sigortaSirketiId.HasValue)
             {
+                // Önce parser ID ile dene
                 parser = _parsers.FirstOrDefault(p => p.SigortaSirketiId == sigortaSirketiId.Value);
+
+                // Bulunamadıysa database'den şirket adını bul ve parser eşleştir
+                if (parser == null)
+                {
+                    var dbSirket = await _context.SigortaSirketleri
+                        .FirstOrDefaultAsync(s => s.Id == sigortaSirketiId.Value);
+
+                    if (dbSirket != null)
+                    {
+                        var sirketAdLower = dbSirket.Ad.ToLower();
+                        parser = _parsers.FirstOrDefault(p =>
+                            sirketAdLower.Contains(p.SirketAdi.ToLower().Split(' ')[0]) ||
+                            p.SirketAdi.ToLower().Contains(sirketAdLower.Split(' ')[0]));
+
+                        if (parser != null)
+                        {
+                            _logger.LogInformation("Parser database şirket adından bulundu: {SirketAd} -> {Parser}",
+                                dbSirket.Ad, parser.SirketAdi);
+                        }
+                    }
+                }
             }
 
             // 2. Dosya adından otomatik tespit
@@ -568,6 +590,108 @@ public class ExcelImportService : IExcelImportService
         return null;
     }
 
+    public async Task<DetectFormatResultDto> DetectFormatFromHeadersAsync(string fileName, List<string> headers)
+    {
+        _logger.LogInformation("Format tespit ediliyor: FileName={FileName}, Headers={Headers}",
+            fileName, string.Join(", ", headers.Take(10)));
+
+        // 1. Önce dosya adından tespit dene
+        var fileNameLower = fileName.ToLowerInvariant();
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+        // XML dosyası için XML parser'ları kontrol et
+        if (extension == ".xml")
+        {
+            if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()))
+            {
+                var (dbId, dbName) = await GetDatabaseSirketInfo(_unicoXmlParser.SigortaSirketiId, _unicoXmlParser.SirketAdi);
+                return new DetectFormatResultDto
+                {
+                    Detected = true,
+                    SigortaSirketiId = dbId,
+                    SigortaSirketiAdi = dbName,
+                    DetectionMethod = "filename"
+                };
+            }
+            if (_quickXmlParser.CanParseXml(fileName))
+            {
+                var (dbId, dbName) = await GetDatabaseSirketInfo(_quickXmlParser.SigortaSirketiId, _quickXmlParser.SirketAdi);
+                return new DetectFormatResultDto
+                {
+                    Detected = true,
+                    SigortaSirketiId = dbId,
+                    SigortaSirketiAdi = dbName,
+                    DetectionMethod = "filename"
+                };
+            }
+        }
+
+        // Dosya adından parser ara
+        foreach (var parser in _parsers)
+        {
+            if (parser.FileNamePatterns.Any(p => fileNameLower.Contains(p.ToLowerInvariant())))
+            {
+                _logger.LogInformation("Dosya adından tespit edildi: {Parser}", parser.SirketAdi);
+                var (dbId, dbName) = await GetDatabaseSirketInfo(parser);
+                return new DetectFormatResultDto
+                {
+                    Detected = true,
+                    SigortaSirketiId = dbId,
+                    SigortaSirketiAdi = dbName,
+                    DetectionMethod = "filename"
+                };
+            }
+        }
+
+        // 2. Header'lardan tespit dene (CanParse metodu ile)
+        if (headers.Count > 0)
+        {
+            foreach (var parser in _parsers)
+            {
+                if (parser.CanParse(fileName, headers))
+                {
+                    _logger.LogInformation("Header'lardan tespit edildi: {Parser}", parser.SirketAdi);
+                    var (dbId, dbName) = await GetDatabaseSirketInfo(parser);
+                    return new DetectFormatResultDto
+                    {
+                        Detected = true,
+                        SigortaSirketiId = dbId,
+                        SigortaSirketiAdi = dbName,
+                        DetectionMethod = "headers"
+                    };
+                }
+            }
+        }
+
+        // Tespit edilemedi
+        _logger.LogWarning("Format tespit edilemedi: {FileName}", fileName);
+        return new DetectFormatResultDto
+        {
+            Detected = false,
+            Message = "Dosya formatı otomatik tespit edilemedi. Lütfen sigorta şirketini manuel olarak seçin."
+        };
+    }
+
+    /// <summary>
+    /// Parser için database'deki şirket ID ve adını bulur (GetSupportedFormatsAsync ile tutarlılık için)
+    /// </summary>
+    private async Task<(int Id, string Name)> GetDatabaseSirketInfo(IExcelParser parser)
+    {
+        return await GetDatabaseSirketInfo(parser.SigortaSirketiId, parser.SirketAdi);
+    }
+
+    /// <summary>
+    /// Şirket adından database ID ve adını bulur
+    /// </summary>
+    private async Task<(int Id, string Name)> GetDatabaseSirketInfo(int parserId, string parserSirketAdi)
+    {
+        var searchName = parserSirketAdi.ToLower().Split(' ')[0];
+        var sirket = await _context.SigortaSirketleri
+            .FirstOrDefaultAsync(s => s.Ad.ToLower().Contains(searchName));
+
+        return (sirket?.Id ?? parserId, sirket?.Ad ?? parserSirketAdi);
+    }
+
     /// <summary>
     /// İçerik bazlı parser tespiti - header kolonlarına bakarak en uygun parser'ı bulur
     /// </summary>
@@ -609,7 +733,11 @@ public class ExcelImportService : IExcelImportService
             }
             else if (extension == ".xls")
             {
-                using var reader = ExcelReaderFactory.CreateReader(fileStream);
+                // LeaveOpen = true ile stream'in kapatılmasını önle
+                using var reader = ExcelReaderFactory.CreateReader(fileStream, new ExcelReaderConfiguration
+                {
+                    LeaveOpen = true
+                });
                 var result = reader.AsDataSet(new ExcelDataSetConfiguration
                 {
                     ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
@@ -817,7 +945,10 @@ public class ExcelImportService : IExcelImportService
         }
         else if (extension == ".xls")
         {
-            using var reader = ExcelReaderFactory.CreateReader(fileStream);
+            using var reader = ExcelReaderFactory.CreateReader(fileStream, new ExcelReaderConfiguration
+            {
+                LeaveOpen = true
+            });
             var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
             {
                 ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
@@ -942,7 +1073,10 @@ public class ExcelImportService : IExcelImportService
         else if (extension == ".xls")
         {
             // .xls için önce tüm veriyi oku, sonra header satırını tespit et
-            using var reader = ExcelReaderFactory.CreateReader(fileStream);
+            using var reader = ExcelReaderFactory.CreateReader(fileStream, new ExcelReaderConfiguration
+            {
+                LeaveOpen = true
+            });
             var result = reader.AsDataSet(new ExcelDataSetConfiguration
             {
                 ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
