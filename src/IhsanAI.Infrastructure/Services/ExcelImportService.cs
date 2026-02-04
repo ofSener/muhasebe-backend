@@ -47,7 +47,8 @@ public class ExcelImportService : IExcelImportService
             new NeovaExcelParser(),
             new UnicoExcelParser(),
             new HdiExcelParser(),
-            new AkExcelParser()
+            new AkExcelParser(),
+            new DogaExcelParser()
         };
 
         // XML Parsers
