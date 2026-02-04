@@ -27,11 +27,11 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// *Plaka          = YOK                     [NO]
 /// *AcenteNo       = YOK (dosyada mevcut)    [NO]
 /// </summary>
-public class AkSigortaSkayParser : BaseExcelParser
+public class AkExcelParser : BaseExcelParser
 {
-    public override int SigortaSirketiId => 8;
+    public override int SigortaSirketiId => 4;
     public override string SirketAdi => "AK Sigorta";
-    public override string[] FileNamePatterns => new[] { "skay", "aksigorta", "ak_sigorta" };
+    public override string[] FileNamePatterns => new[] { "aksigorta", "ak_" };
 
     /// <summary>
     /// SKAY formatında header 8. satırda (1-indexed)
@@ -55,10 +55,36 @@ public class AkSigortaSkayParser : BaseExcelParser
     {
         var result = new List<ExcelImportRowDto>();
         int rowNumber = 0;
+        bool isInIptalSection = false;  // TAHAKKUK/IPTAL bölüm takibi
 
         foreach (var row in rows)
         {
             rowNumber++;
+
+            // Satır içeriğini kontrol et - POLICE NO kolonunu veya tüm değerleri tara
+            var rowMarker = DetectRowMarker(row);
+
+            // TAHAKKUK/IPTAL section marker kontrolü
+            if (rowMarker == RowMarkerType.IptalSectionStart)
+            {
+                isInIptalSection = true;
+                continue;
+            }
+            if (rowMarker == RowMarkerType.TahakkukSectionStart)
+            {
+                isInIptalSection = false;
+                continue;
+            }
+            // Toplam satırlarını atla
+            if (rowMarker == RowMarkerType.TotalRow)
+            {
+                continue;
+            }
+            // Metadata satırlarını atla
+            if (rowMarker == RowMarkerType.MetadataRow)
+            {
+                continue;
+            }
 
             var policeNo = GetPoliceNo(row);
 
@@ -69,19 +95,32 @@ public class AkSigortaSkayParser : BaseExcelParser
             if (policeNo.ToUpperInvariant().Contains("POLICE"))
                 continue;
 
+            // Primleri al
+            var brutPrim = GetDecimalFromColumn(row, "TOPLAM");
+            var netPrim = GetDecimalFromColumn(row, "NET PRIM", "NETPRIM", "NET PRİM");
+            var komisyon = GetDecimalFromColumn(row, "KOM TUTARI", "KOMTUTARI", "KOMİSYON");
+
+            // İptal bölümündeyse primleri negatife çevir
+            if (isInIptalSection)
+            {
+                if (brutPrim.HasValue && brutPrim > 0) brutPrim = -brutPrim;
+                if (netPrim.HasValue && netPrim > 0) netPrim = -netPrim;
+                if (komisyon.HasValue && komisyon > 0) komisyon = -komisyon;
+            }
+
             var dto = new ExcelImportRowDto
             {
                 RowNumber = rowNumber,
 
                 // Poliçe Temel Bilgileri
                 PoliceNo = policeNo,
-                YenilemeNo = null,  // SKAY'da yok
+                YenilemeNo = null,
                 ZeyilNo = GetZeyilNo(row),
-                ZeyilTipKodu = null,  // SKAY'da yok
+                ZeyilTipKodu = null,
                 Brans = GetBransFromTrf(row),
-                PoliceTipi = GetPoliceTipi(row),
+                PoliceTipi = isInIptalSection ? "İPTAL" : GetPoliceTipi(row),
 
-                // Tarihler - SKAY kolonları özel karakterler içeriyor
+                // Tarihler
                 TanzimTarihi = GetTanzimTarihi(row),
                 BaslangicTarihi = GetBaslangicTarihi(row),
                 BitisTarihi = GetBitisTarihi(row),
@@ -89,22 +128,22 @@ public class AkSigortaSkayParser : BaseExcelParser
                 ZeyilBaslangicTarihi = null,
 
                 // Primler
-                BrutPrim = GetDecimalFromColumn(row, "TOPLAM"),
-                NetPrim = GetDecimalFromColumn(row, "NET PRIM", "NETPRIM", "NET PRİM"),
-                Komisyon = GetDecimalFromColumn(row, "KOM TUTARI", "KOMTUTARI", "KOMİSYON"),
+                BrutPrim = brutPrim,
+                NetPrim = netPrim,
+                Komisyon = komisyon,
 
                 // Müşteri Bilgileri
                 SigortaliAdi = GetStringFromColumn(row, "SIGORTALI", "SİGORTALI")?.Trim(),
-                SigortaliSoyadi = null,  // SKAY'da birleşik
+                SigortaliSoyadi = null,
 
                 // Araç Bilgileri
-                Plaka = null,  // SKAY'da yok
+                Plaka = null,
 
                 // Acente Bilgileri
-                AcenteNo = null  // SKAY'da ayrı kolon yok
+                AcenteNo = null
             };
 
-            // Brüt prim yoksa toplam'ı kullan, o da yoksa net primi kullan
+            // Brüt prim yoksa net primi kullan
             if (!dto.BrutPrim.HasValue || dto.BrutPrim == 0)
             {
                 dto = dto with { BrutPrim = dto.NetPrim };
@@ -127,6 +166,74 @@ public class AkSigortaSkayParser : BaseExcelParser
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Satır tipi - section marker, metadata, toplam satırı veya veri satırı
+    /// </summary>
+    private enum RowMarkerType
+    {
+        DataRow,
+        IptalSectionStart,
+        TahakkukSectionStart,
+        TotalRow,
+        MetadataRow
+    }
+
+    /// <summary>
+    /// Satırın tipini tespit eder - tüm kolonları tarar
+    /// </summary>
+    private RowMarkerType DetectRowMarker(IDictionary<string, object?> row)
+    {
+        // Tüm kolon değerlerini kontrol et
+        foreach (var kvp in row)
+        {
+            var value = kvp.Value?.ToString()?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(value)) continue;
+
+            var valueUpper = value.ToUpperInvariant();
+
+            // TAHAKKUK/IPTAL section markers
+            // Format: "TAHAKKUK/IPTAL : Iptal" veya "TAHAKKUK/IPTAL : Tahakkuk"
+            if (valueUpper.Contains("TAHAKKUK/IPTAL") || valueUpper.Contains("TAHAKKUK/İPTAL"))
+            {
+                // Colon'dan sonraki kısmı kontrol et
+                var colonIdx = value.IndexOf(':');
+                if (colonIdx >= 0)
+                {
+                    var afterColon = value.Substring(colonIdx + 1).Trim().ToUpperInvariant();
+                    if (afterColon.Contains("IPTAL") || afterColon.Contains("İPTAL"))
+                    {
+                        return RowMarkerType.IptalSectionStart;
+                    }
+                }
+                // Colon yoksa veya colon sonrası iptal değilse -> tahakkuk
+                return RowMarkerType.TahakkukSectionStart;
+            }
+
+            // Toplam satırları (TAHAKKUK TOPLAM, İPTAL TOPLAM vb.)
+            if (valueUpper.Contains("TOPLAM") && !valueUpper.Contains("POLICE"))
+            {
+                return RowMarkerType.TotalRow;
+            }
+
+            // Metadata patterns
+            var metadataPatterns = new[]
+            {
+                "AK SİGORTA", "AK SIGORTA",
+                "KAYIT DEFTER", "KAYIT DEFTERİ",
+                "PARA BİRİMİ", "PARA BIRIMI",
+                "ACENTA", "ACENTE",
+                "TARİHLERİ ARASI", "TARIHLERI ARASI"
+            };
+
+            if (metadataPatterns.Any(p => valueUpper.Contains(p)))
+            {
+                return RowMarkerType.MetadataRow;
+            }
+        }
+
+        return RowMarkerType.DataRow;
     }
 
     private string? GetPoliceNo(IDictionary<string, object?> row)
@@ -184,22 +291,43 @@ public class AkSigortaSkayParser : BaseExcelParser
 
     private decimal? GetDecimalFromColumn(IDictionary<string, object?> row, params string[] possibleColumns)
     {
-        var strValue = GetStringFromColumn(row, possibleColumns);
-        if (string.IsNullOrEmpty(strValue)) return null;
+        foreach (var col in possibleColumns)
+        {
+            var key = row.Keys.FirstOrDefault(k =>
+            {
+                var normalizedKey = NormalizeSkayColumnName(k);
+                var normalizedCol = NormalizeSkayColumnName(col);
+                return normalizedKey.Contains(normalizedCol) || normalizedCol.Contains(normalizedKey);
+            });
 
-        // Para formatını temizle
-        strValue = strValue
-            .Replace("₺", "")
-            .Replace("TL", "")
-            .Replace(" ", "")
-            .Replace(".", "")  // Binlik ayırıcı
-            .Replace(",", ".")  // Ondalık ayırıcı
-            .Trim();
+            if (key != null && row.TryGetValue(key, out var value) && value != null)
+            {
+                // Numeric tipleri doğrudan dönüştür (Excel'den Double olarak gelir)
+                if (value is decimal d) return d;
+                if (value is double dbl) return (decimal)dbl;
+                if (value is float f) return (decimal)f;
+                if (value is int i) return i;
+                if (value is long l) return l;
 
-        if (decimal.TryParse(strValue, System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture, out var result))
-            return result;
+                // String ise parse et
+                var strValue = value.ToString()?.Trim();
+                if (string.IsNullOrEmpty(strValue)) continue;
 
+                // Türkçe para formatını temizle (sadece string değerler için)
+                // Örn: "1.621,10" -> "1621.10"
+                strValue = strValue
+                    .Replace("₺", "")
+                    .Replace("TL", "")
+                    .Replace(" ", "")
+                    .Replace(".", "")  // Binlik ayırıcı
+                    .Replace(",", ".")  // Ondalık ayırıcı
+                    .Trim();
+
+                if (decimal.TryParse(strValue, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var result))
+                    return result;
+            }
+        }
         return null;
     }
 
@@ -274,12 +402,18 @@ public class AkSigortaSkayParser : BaseExcelParser
 
         if (string.IsNullOrEmpty(trf)) return null;
 
-        // SKAY tarife kodları
-        return trf.ToUpperInvariant() switch
+        // -1 suffix'i temizle (örn: T41-1 -> T41)
+        var cleanTrf = trf.ToUpperInvariant().Split('-')[0].Trim();
+
+        // AK Sigorta tarife kodları
+        return cleanTrf switch
         {
-            var x when x.StartsWith("K11") => "TRAFİK",
-            var x when x.StartsWith("ZDS") => "DASK",
-            var x when x.StartsWith("K16") => "KASKO",
+            "T41" => "TRAFİK",
+            "K11" => "KASKO",
+            "ZDS" => "DASK",
+            "Y17" => "KONUT",
+            var x when x.StartsWith("T4") => "TRAFİK",
+            var x when x.StartsWith("K1") => "KASKO",
             var x when x.StartsWith("Y") => "KONUT",
             _ => trf
         };

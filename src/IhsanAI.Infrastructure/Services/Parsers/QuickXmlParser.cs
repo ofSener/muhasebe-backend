@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using IhsanAI.Application.Features.ExcelImport.Dtos;
+using IhsanAI.Infrastructure.Common;
 
 namespace IhsanAI.Infrastructure.Services.Parsers;
 
@@ -404,17 +405,20 @@ public class QuickXmlParser
     }
 
     /// <summary>
-    /// Dosyanin Quick XML formati olup olmadigini kontrol eder
+    /// Dosyanin Quick XML formati olup olmadigini kontrol eder.
+    /// Türkçe karakter normalizasyonu ile dosya adı pattern eşleştirmesi yapar.
     /// </summary>
     public bool CanParseXml(string fileName)
     {
-        var fileNameLower = fileName.ToLowerInvariant();
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
         if (extension != ".xml")
             return false;
 
-        return FileNamePatterns.Any(p => fileNameLower.Contains(p.ToLowerInvariant()));
+        // Türkçe karakter normalizasyonu ile pattern eşleştirme
+        // Örn: "quıck" ve "quick" aynı şekilde eşleşir
+        var normalizedFileName = TurkishStringHelper.Normalize(fileName);
+        return FileNamePatterns.Any(p => normalizedFileName.Contains(TurkishStringHelper.Normalize(p)));
     }
 
     /// <summary>

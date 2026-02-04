@@ -1,4 +1,5 @@
 using System.Text;
+using System.Xml.Linq;
 using ExcelDataReader;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -7,6 +8,7 @@ using OfficeOpenXml;
 using IhsanAI.Application.Common.Interfaces;
 using IhsanAI.Application.Features.ExcelImport.Dtos;
 using IhsanAI.Domain.Entities;
+using IhsanAI.Infrastructure.Common;
 using IhsanAI.Infrastructure.Services.Parsers;
 
 namespace IhsanAI.Infrastructure.Services;
@@ -45,7 +47,7 @@ public class ExcelImportService : IExcelImportService
             new NeovaExcelParser(),
             new UnicoExcelParser(),
             new HdiExcelParser(),
-            new AkSigortaSkayParser()
+            new AkExcelParser()
         };
 
         // XML Parsers
@@ -104,12 +106,12 @@ public class ExcelImportService : IExcelImportService
                 }
             }
 
-            // 2. Dosya adından otomatik tespit
+            // 2. Dosya adından otomatik tespit (Türkçe karakter normalizasyonu ile)
             if (parser == null)
             {
-                var fileNameLower = fileName.ToLowerInvariant();
+                var normalizedFileName = TurkishStringHelper.Normalize(fileName);
                 parser = _parsers.FirstOrDefault(p =>
-                    p.FileNamePatterns.Any(pattern => fileNameLower.Contains(pattern.ToLowerInvariant())));
+                    p.FileNamePatterns.Any(pattern => normalizedFileName.Contains(TurkishStringHelper.Normalize(pattern))));
             }
 
             // 3. İçerik bazlı tespit - header kolonlarına bakarak parser seç
@@ -563,30 +565,42 @@ public class ExcelImportService : IExcelImportService
 
     public int? DetectSigortaSirketiFromFileName(string fileName)
     {
-        var fileNameLower = fileName.ToLowerInvariant();
+        var normalizedFileName = TurkishStringHelper.Normalize(fileName);
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
+
+        _logger.LogDebug("Dosya adından şirket algılama: {FileName} → normalized: {Normalized}", fileName, normalizedFileName);
 
         // XML dosyası için XML parser'ları kontrol et
         if (extension == ".xml")
         {
             if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()))
             {
+                _logger.LogDebug("XML algılama: Unico eşleşti (ID: {Id})", _unicoXmlParser.SigortaSirketiId);
                 return _unicoXmlParser.SigortaSirketiId;
             }
             if (_quickXmlParser.CanParseXml(fileName))
             {
+                _logger.LogDebug("XML algılama: Quick eşleşti (ID: {Id})", _quickXmlParser.SigortaSirketiId);
                 return _quickXmlParser.SigortaSirketiId;
             }
         }
 
+        // Excel parser'ları için Türkçe karakter normalizasyonu ile pattern eşleştirme
         foreach (var parser in _parsers)
         {
-            if (parser.FileNamePatterns.Any(p => fileNameLower.Contains(p.ToLowerInvariant())))
+            foreach (var pattern in parser.FileNamePatterns)
             {
-                return parser.SigortaSirketiId;
+                var normalizedPattern = TurkishStringHelper.Normalize(pattern);
+                if (normalizedFileName.Contains(normalizedPattern))
+                {
+                    _logger.LogDebug("Excel algılama: {Parser} eşleşti (pattern: {Pattern}, ID: {Id})",
+                        parser.SirketAdi, pattern, parser.SigortaSirketiId);
+                    return parser.SigortaSirketiId;
+                }
             }
         }
 
+        _logger.LogDebug("Dosya adından şirket algılanamadı: {FileName}", fileName);
         return null;
     }
 
@@ -596,7 +610,7 @@ public class ExcelImportService : IExcelImportService
             fileName, string.Join(", ", headers.Take(10)));
 
         // 1. Önce dosya adından tespit dene
-        var fileNameLower = fileName.ToLowerInvariant();
+        var normalizedFileName = TurkishStringHelper.Normalize(fileName);
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 
         // XML dosyası için XML parser'ları kontrol et
@@ -629,7 +643,7 @@ public class ExcelImportService : IExcelImportService
         // Dosya adından parser ara
         foreach (var parser in _parsers)
         {
-            if (parser.FileNamePatterns.Any(p => fileNameLower.Contains(p.ToLowerInvariant())))
+            if (parser.FileNamePatterns.Any(p => normalizedFileName.Contains(TurkishStringHelper.Normalize(p))))
             {
                 _logger.LogInformation("Dosya adından tespit edildi: {Parser}", parser.SirketAdi);
                 var (dbId, dbName) = await GetDatabaseSirketInfo(parser);
@@ -786,6 +800,7 @@ public class ExcelImportService : IExcelImportService
 
     /// <summary>
     /// XML dosyasını parse eder (Quick Sigorta ve Unico Sigorta XML formatları)
+    /// Önce içerik bazlı algılama (root element), sonra dosya adı bazlı algılama yapar.
     /// </summary>
     private async Task<ExcelImportPreviewDto> ParseXmlFileAsync(Stream fileStream, string fileName, int? sigortaSirketiId)
     {
@@ -797,21 +812,38 @@ public class ExcelImportService : IExcelImportService
             int detectedSirketId = 0;
             string detectedFormat = "Bilinmeyen XML Formatı";
 
-            // Unico XML parser'ı kontrol et
-            if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()) || sigortaSirketiId == _unicoXmlParser.SigortaSirketiId)
+            // 1. Önce içerik bazlı algılama dene (en güvenilir)
+            var contentDetectedParser = DetectXmlParserFromContent(fileStream);
+            fileStream.Position = 0; // Stream'i başa sar
+
+            if (contentDetectedParser == "quick")
+            {
+                parsedRows = _quickXmlParser.ParseXml(fileStream);
+                detectedSirketId = _quickXmlParser.SigortaSirketiId;
+                detectedFormat = _quickXmlParser.SirketAdi;
+                _logger.LogInformation("Quick XML parser kullanılıyor (içerik bazlı algılama)");
+            }
+            else if (contentDetectedParser == "unico")
             {
                 parsedRows = _unicoXmlParser.ParseXml(fileStream);
                 detectedSirketId = _unicoXmlParser.SigortaSirketiId;
                 detectedFormat = _unicoXmlParser.SirketAdi;
-                _logger.LogInformation("Unico XML parser kullanılıyor");
+                _logger.LogInformation("Unico XML parser kullanılıyor (içerik bazlı algılama)");
             }
-            // Quick XML parser'ı kontrol et
+            // 2. İçerik algılama başarısızsa, dosya adı bazlı algılama dene
+            else if (_unicoXmlParser.CanParse(fileName, Enumerable.Empty<string>()) || sigortaSirketiId == _unicoXmlParser.SigortaSirketiId)
+            {
+                parsedRows = _unicoXmlParser.ParseXml(fileStream);
+                detectedSirketId = _unicoXmlParser.SigortaSirketiId;
+                detectedFormat = _unicoXmlParser.SirketAdi;
+                _logger.LogInformation("Unico XML parser kullanılıyor (dosya adı bazlı)");
+            }
             else if (_quickXmlParser.CanParseXml(fileName) || sigortaSirketiId == _quickXmlParser.SigortaSirketiId)
             {
                 parsedRows = _quickXmlParser.ParseXml(fileStream);
                 detectedSirketId = _quickXmlParser.SigortaSirketiId;
                 detectedFormat = _quickXmlParser.SirketAdi;
-                _logger.LogInformation("Quick XML parser kullanılıyor");
+                _logger.LogInformation("Quick XML parser kullanılıyor (dosya adı bazlı)");
             }
 
             // Parser bulunduysa sonuçları işle
@@ -881,6 +913,54 @@ public class ExcelImportService : IExcelImportService
         {
             _logger.LogError(ex, "XML parsing hatası: {FileName}", fileName);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// XML içeriğinden parser türünü algılar (root element ve yapı kontrolü).
+    /// Quick: PoliceTransferDto root veya Policeler/AcenteBilgiler elementleri
+    /// Unico: Policy elementleri veya UnicoXML root
+    /// </summary>
+    private string? DetectXmlParserFromContent(Stream xmlStream)
+    {
+        try
+        {
+            var position = xmlStream.Position;
+            var doc = XDocument.Load(xmlStream);
+            xmlStream.Position = position;
+
+            var root = doc.Root;
+            if (root == null)
+                return null;
+
+            // Quick Sigorta XML yapısı kontrolü
+            // Root: PoliceTransferDto veya Policeler/AcenteBilgiler elementleri
+            if (root.Name.LocalName == "PoliceTransferDto" ||
+                root.Element("Policeler") != null ||
+                root.Element("AcenteBilgiler") != null ||
+                root.Descendants("PoliceNo").Any() && root.Descendants("AcenteKomisyon").Any())
+            {
+                _logger.LogDebug("XML içerik algılama: Quick formatı tespit edildi (root: {Root})", root.Name.LocalName);
+                return "quick";
+            }
+
+            // Unico Sigorta XML yapısı kontrolü
+            // Root: UnicoXML veya Policy elementleri ile ProductNo/GrossPremium
+            if (root.Name.LocalName == "UnicoXML" ||
+                root.Descendants("Policy").Any() && root.Descendants("ProductNo").Any() ||
+                root.Descendants("Policy").Any() && root.Descendants("GrossPremium").Any())
+            {
+                _logger.LogDebug("XML içerik algılama: Unico formatı tespit edildi (root: {Root})", root.Name.LocalName);
+                return "unico";
+            }
+
+            _logger.LogDebug("XML içerik algılama: Tanınmayan format (root: {Root})", root.Name.LocalName);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "XML içerik algılama hatası");
+            return null;
         }
     }
 
@@ -1173,6 +1253,11 @@ public class ExcelImportService : IExcelImportService
 
         if (string.IsNullOrEmpty(firstValue))
             return true;
+
+        // Section marker'ları ATLAMA - parser'ın bunları işlemesine izin ver
+        // AK Sigorta formatı: "TAHAKKUK/IPTAL : Tahakkuk" veya "TAHAKKUK/IPTAL : Iptal"
+        if (firstValue.Contains("TAHAKKUK/IPTAL") || firstValue.Contains("TAHAKKUK/İPTAL"))
+            return false;
 
         var skipKeywords = new[] { "TAHAKKUK", "İPTAL", "IPTAL", "NET", "BRÜT", "BRUT", "TOPLAM", "NET PRİM", "BRÜT PRİM", "GENEL TOPLAM" };
 

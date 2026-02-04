@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using IhsanAI.Application.Features.ExcelImport.Dtos;
+using IhsanAI.Infrastructure.Common;
 
 namespace IhsanAI.Infrastructure.Services.Parsers;
 
@@ -87,9 +88,13 @@ public class UnicoXmlParser : IExcelParser
     public bool CanParse(string fileName, IEnumerable<string> headerColumns)
     {
         // XML dosyası için dosya adı kontrolü
-        var fileNameLower = fileName.ToLowerInvariant();
-        return fileNameLower.EndsWith(".xml") &&
-               FileNamePatterns.Any(pattern => fileNameLower.Contains(pattern.ToLowerInvariant()));
+        // Türkçe karakter normalizasyonu ile pattern eşleştirme
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension != ".xml")
+            return false;
+
+        var normalizedFileName = TurkishStringHelper.Normalize(fileName);
+        return FileNamePatterns.Any(pattern => normalizedFileName.Contains(TurkishStringHelper.Normalize(pattern)));
     }
 
     public List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
