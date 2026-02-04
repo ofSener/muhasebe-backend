@@ -21,6 +21,7 @@ public class CurrentUserService : ICurrentUserService
     public bool IsCompanyAdmin => GetClaimAsBool("yetkilerSayfasindaIslemYapabilsin");
     public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
     public string? GorebilecegiPoliceler => _httpContextAccessor.HttpContext?.User?.FindFirst("gorebilecegiPoliceler")?.Value;
+    public string? PoliceYakalamaSecenekleri => _httpContextAccessor.HttpContext?.User?.FindFirst("policeYakalamaSecenekleri")?.Value;
 
     /// <summary>
     /// SuperAdmin kontrolü - şu an için false.

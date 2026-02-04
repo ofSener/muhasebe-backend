@@ -44,15 +44,18 @@ public class CreateYakalananPoliceCommandHandler : IRequestHandler<CreateYakalan
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
+    private readonly IAcentelikService _acentelikService;
 
     public CreateYakalananPoliceCommandHandler(
         IApplicationDbContext context,
         ICurrentUserService currentUserService,
-        IDateTimeService dateTimeService)
+        IDateTimeService dateTimeService,
+        IAcentelikService acentelikService)
     {
         _context = context;
         _currentUserService = currentUserService;
         _dateTimeService = dateTimeService;
+        _acentelikService = acentelikService;
     }
 
     public async Task<CreateYakalananPoliceResult> Handle(CreateYakalananPoliceCommand request, CancellationToken cancellationToken)
@@ -65,6 +68,41 @@ public class CreateYakalananPoliceCommandHandler : IRequestHandler<CreateYakalan
 
             // UyeId: request'ten gelirse onu kullan, yoksa JWT'den
             var uyeId = request.UyeId ?? _currentUserService.UyeId ?? 0;
+
+            // ========== ACENTELIK KONTROLÜ ==========
+            // PoliceYakalamaSecenekleri: "0" = Kontrol yok, "1" = Soft kontrol, "2" = Hard kontrol
+            var policeYakalamaSecenekleri = _currentUserService.PoliceYakalamaSecenekleri ?? "0";
+            sbyte disPolice = request.DisPolice ?? 0;
+
+            if (policeYakalamaSecenekleri == "1" || policeYakalamaSecenekleri == "2")
+            {
+                // Acentelik kontrolü yap
+                var acentelikVar = await _acentelikService.AcentelikVarMi(
+                    firmaId,
+                    request.SigortaSirketi,
+                    request.AcenteNo,
+                    request.AcenteAdi
+                );
+
+                if (!acentelikVar)
+                {
+                    if (policeYakalamaSecenekleri == "1")
+                    {
+                        // Soft kontrol: Acentelik yoksa DisPolice=1 yap ama kaydet
+                        disPolice = 1;
+                    }
+                    else if (policeYakalamaSecenekleri == "2")
+                    {
+                        // Hard kontrol: Acentelik yoksa REDDET
+                        return new CreateYakalananPoliceResult
+                        {
+                            Success = false,
+                            Error = "Gelen poliçenin acenteliği, acenteliklerinizde bulunmadığından poliçe kaydedilmedi!"
+                        };
+                    }
+                }
+            }
+            // ========================================
 
             // ProduktorSubeId'yi kullanıcılar tablosundan al
             int produktorSubeId = 0;
@@ -116,7 +154,7 @@ public class CreateYakalananPoliceCommandHandler : IRequestHandler<CreateYakalan
                 existingPolice.MusteriId = request.MusteriId;
                 existingPolice.CepTelefonu = request.CepTelefonu;
                 existingPolice.GuncelleyenUyeId = _currentUserService.UyeId;
-                existingPolice.DisPolice = request.DisPolice ?? 0;
+                existingPolice.DisPolice = disPolice; // Acentelik kontrolünden gelen değer
                 existingPolice.AcenteAdi = request.AcenteAdi;
                 existingPolice.AcenteNo = request.AcenteNo ?? string.Empty;
                 existingPolice.GuncellenmeTarihi = _dateTimeService.Now;
@@ -154,7 +192,7 @@ public class CreateYakalananPoliceCommandHandler : IRequestHandler<CreateYakalan
                     MusteriId = request.MusteriId,
                     CepTelefonu = request.CepTelefonu,
                     GuncelleyenUyeId = null,
-                    DisPolice = request.DisPolice ?? 0,
+                    DisPolice = disPolice, // Acentelik kontrolünden gelen değer
                     AcenteAdi = request.AcenteAdi,
                     AcenteNo = request.AcenteNo ?? string.Empty,
                     EklenmeTarihi = _dateTimeService.Now,

@@ -12,6 +12,14 @@ public interface ICurrentUserService
     string? GorebilecegiPoliceler { get; }
 
     /// <summary>
+    /// Poliçe yakalama seçenekleri:
+    /// "0" = Kontrol yok (tüm poliçeleri kaydet)
+    /// "1" = Soft kontrol (acentelik yoksa işaretle ama kaydet)
+    /// "2" = Hard kontrol (acentelik yoksa reddet)
+    /// </summary>
+    string? PoliceYakalamaSecenekleri { get; }
+
+    /// <summary>
     /// Kullanıcı SuperAdmin mi? (Tüm firmaların verilerine erişebilir)
     /// GorebilecegiPoliceler = "1" olan kullanıcılar SuperAdmin sayılır.
     /// </summary>

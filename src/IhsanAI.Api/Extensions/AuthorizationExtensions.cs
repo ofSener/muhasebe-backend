@@ -72,9 +72,10 @@ public static class AuthorizationExtensions
                       .RequireClaim("finansRaporlariGorebilsin", "1"));
 
             // Captured policies
+            // Eski sistemde herkes görüntüleyebiliyordu (login olanlar)
+            // PoliceYakalamaSecenekleri SADECE yakalama sırasında kullanılır
             options.AddPolicy("CanViewCapturedPolicies", policy =>
-                policy.RequireAuthenticatedUser()
-                      .RequireClaim("policeYakalamaSecenekleri", "1"));
+                policy.RequireAuthenticatedUser());
 
             // Excel import
             options.AddPolicy("CanImportPolicies", policy =>
