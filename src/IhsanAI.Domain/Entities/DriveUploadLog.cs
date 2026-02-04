@@ -47,6 +47,10 @@ public class DriveUploadLog
 
     [Column("UploadedAt")]
     public DateTime UploadedAt { get; set; }
+
+    [Column("PoliceId")]
+    [MaxLength(50)]
+    public string? PoliceId { get; set; }
 }
 
 public enum UploadStatus

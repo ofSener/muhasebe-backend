@@ -8,9 +8,10 @@ public static class YakalananPolicelerEndpoints
 {
     public static IEndpointRouteBuilder MapYakalananPolicelerEndpoints(this IEndpointRouteBuilder app)
     {
+        // Group without authorization - each endpoint specifies its own
         var group = app.MapGroup("/api/policies/captured")
             .WithTags("Captured Policies")
-            .RequireAuthorization("CanViewCapturedPolicies");
+            .RequireAuthorization(); // Only requires authentication, not specific policy
 
         group.MapGet("/", async (
             DateTime? startDate,
@@ -24,7 +25,8 @@ public static class YakalananPolicelerEndpoints
             return Results.Ok(result);
         })
         .WithName("GetYakalananPoliceler")
-        .WithDescription("Yakalanan poliçeleri listeler (yetki bazlı filtreleme ile)");
+        .WithDescription("Yakalanan poliçeleri listeler (yetki bazlı filtreleme ile)")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapGet("/{id:int}", async (int id, IMediator mediator) =>
         {
@@ -32,7 +34,8 @@ public static class YakalananPolicelerEndpoints
             return result is not null ? Results.Ok(result) : Results.NotFound();
         })
         .WithName("GetYakalananPoliceById")
-        .WithDescription("ID'ye göre yakalanan poliçe getirir");
+        .WithDescription("ID'ye göre yakalanan poliçe getirir")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapGet("/stats", async (DateTime? startDate, DateTime? endDate, IMediator mediator) =>
         {
@@ -40,7 +43,8 @@ public static class YakalananPolicelerEndpoints
             return Results.Ok(result);
         })
         .WithName("GetYakalananPoliceStats")
-        .WithDescription("Yakalanan poliçe istatistiklerini getirir (yetki bazlı filtreleme ile)");
+        .WithDescription("Yakalanan poliçe istatistiklerini getirir (yetki bazlı filtreleme ile)")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapGet("/not-in-pool", async (
             int? firmaId,
@@ -64,7 +68,8 @@ public static class YakalananPolicelerEndpoints
             return Results.Ok(result);
         })
         .WithName("GetYakalananNotInPool")
-        .WithDescription("Yakalanan ama havuzda olmayan poliçeleri listeler (Eşleşmeyenler)");
+        .WithDescription("Yakalanan ama havuzda olmayan poliçeleri listeler (Eşleşmeyenler)")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapPut("/{id:int}", async (int id, UpdateYakalananPoliceCommand command, IMediator mediator) =>
         {
@@ -81,7 +86,8 @@ public static class YakalananPolicelerEndpoints
             });
         })
         .WithName("UpdateYakalananPolice")
-        .WithDescription("Yakalanan poliçeyi güncelle (Prodüktör/Şube atama)");
+        .WithDescription("Yakalanan poliçeyi güncelle (Prodüktör/Şube atama)")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapPut("/batch-update", async (BatchUpdateYakalananPolicelerCommand command, IMediator mediator) =>
         {
@@ -95,7 +101,8 @@ public static class YakalananPolicelerEndpoints
             });
         })
         .WithName("BatchUpdateYakalananPoliceler")
-        .WithDescription("Yakalanan poliçeleri toplu güncelle");
+        .WithDescription("Yakalanan poliçeleri toplu güncelle")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         group.MapPost("/{id:int}/approve", async (int id, IMediator mediator) =>
         {
@@ -121,7 +128,8 @@ public static class YakalananPolicelerEndpoints
             }
         })
         .WithName("ApproveCapturedPolicy")
-        .WithDescription("Yakalanan poliçeyi direkt olarak poliçeler tablosuna kaydet (havuzu bypass et)");
+        .WithDescription("Yakalanan poliçeyi direkt olarak poliçeler tablosuna kaydet (havuzu bypass et)")
+        .RequireAuthorization("CanViewCapturedPolicies");
 
         // POST - Create new yakalanan police
         group.MapPost("/", async (CreateYakalananPoliceRequest request, IMediator mediator) =>
@@ -143,20 +151,23 @@ public static class YakalananPolicelerEndpoints
                 DisPolice = request.DisPolice,
                 AcenteAdi = request.AcenteAdi,
                 AcenteNo = request.AcenteNo,
-                Aciklama = request.Aciklama
+                Aciklama = request.Aciklama,
+                ProduktorId = request.ProduktorId,
+                UyeId = request.UyeId,
+                CanUpdate = request.CanUpdate
             };
 
             var result = await mediator.Send(command);
 
             if (result.Success)
             {
-                return Results.Ok(new { success = true, id = result.Id });
+                return Results.Ok(new { success = true, id = result.Id, isUpdated = result.IsUpdated, isSkipped = result.IsSkipped });
             }
 
             return Results.BadRequest(new { success = false, error = result.Error });
         })
         .WithName("CreateYakalananPolice")
-        .WithDescription("Yeni yakalanan police kaydı oluşturur ve ID döner");
+        .WithDescription("Yakalanan police kaydı oluşturur veya günceller (upsert)");
 
         return app;
     }
@@ -178,5 +189,8 @@ public record CreateYakalananPoliceRequest(
     sbyte? DisPolice,
     string? AcenteAdi,
     string? AcenteNo,
-    string? Aciklama
+    string? Aciklama,
+    int? ProduktorId,
+    int? UyeId,
+    bool CanUpdate = true
 );
