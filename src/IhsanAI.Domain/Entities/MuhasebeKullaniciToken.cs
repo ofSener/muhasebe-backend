@@ -23,7 +23,7 @@ public class MuhasebeKullaniciToken
     /// JWT Access Token
     /// </summary>
     [Column("AccessToken")]
-    [MaxLength(1000)]
+    [MaxLength(2000)]
     public string AccessToken { get; set; } = string.Empty;
 
     /// <summary>

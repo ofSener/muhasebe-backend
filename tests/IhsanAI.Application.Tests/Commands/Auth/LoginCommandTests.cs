@@ -287,7 +287,7 @@ public class LoginCommandTests : TestBase
         // Assert
         result.Success.Should().BeTrue();
         result.User!.Permissions.Should().NotBeNull();
-        result.User.Permissions!.GorebilecegiPoliceler.Should().Be(gorebilecegiPoliceler);
+        result.User.Permissions!.GorebilecegiPolicelerveKartlar.Should().Be(gorebilecegiPoliceler);
     }
 
     [Fact]

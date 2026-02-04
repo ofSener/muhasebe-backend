@@ -197,6 +197,25 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             claims.Add(new Claim("produktorleriGorebilsin", "1"));
             claims.Add(new Claim("gorebilecegiPoliceler", "1")); // Firma yöneticisi seviyesinde
             claims.Add(new Claim("kazanclarimGorebilsin", "1"));
+
+            // Müşteri Yetkileri
+            claims.Add(new Claim("musterileriGorebilsin", "1"));
+            claims.Add(new Claim("musteriListesiGorebilsin", "1"));
+            claims.Add(new Claim("musteriDetayGorebilsin", "1"));
+            claims.Add(new Claim("yenilemeTakibiGorebilsin", "1"));
+
+            // Finans Yetkileri
+            claims.Add(new Claim("finansSayfasiniGorebilsin", "1"));
+            claims.Add(new Claim("finansDashboardGorebilsin", "1"));
+            claims.Add(new Claim("policeOdemeleriGorebilsin", "1"));
+            claims.Add(new Claim("tahsilatTakibiGorebilsin", "1"));
+            claims.Add(new Claim("finansRaporlariGorebilsin", "1"));
+
+            // Entegrasyon Yetkileri
+            claims.Add(new Claim("driveEntegrasyonuGorebilsin", "1"));
+
+            // Yakalama Yetkileri
+            claims.Add(new Claim("policeYakalamaSecenekleri", "1"));
         }
         else if (yetki != null)
         {
@@ -210,6 +229,25 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             claims.Add(new Claim("produktorleriGorebilsin", yetki.ProduktorleriGorebilsin ?? "0"));
             claims.Add(new Claim("gorebilecegiPoliceler", yetki.GorebilecegiPolicelerveKartlar ?? "3"));
             claims.Add(new Claim("kazanclarimGorebilsin", yetki.KazanclarimGorebilsin ?? "0"));
+
+            // Müşteri Yetkileri
+            claims.Add(new Claim("musterileriGorebilsin", yetki.MusterileriGorebilsin ?? "0"));
+            claims.Add(new Claim("musteriListesiGorebilsin", yetki.MusteriListesiGorebilsin ?? "0"));
+            claims.Add(new Claim("musteriDetayGorebilsin", yetki.MusteriDetayGorebilsin ?? "0"));
+            claims.Add(new Claim("yenilemeTakibiGorebilsin", yetki.YenilemeTakibiGorebilsin ?? "0"));
+
+            // Finans Yetkileri
+            claims.Add(new Claim("finansSayfasiniGorebilsin", yetki.FinansSayfasiniGorebilsin ?? "0"));
+            claims.Add(new Claim("finansDashboardGorebilsin", yetki.FinansDashboardGorebilsin ?? "0"));
+            claims.Add(new Claim("policeOdemeleriGorebilsin", yetki.PoliceOdemeleriGorebilsin ?? "0"));
+            claims.Add(new Claim("tahsilatTakibiGorebilsin", yetki.TahsilatTakibiGorebilsin ?? "0"));
+            claims.Add(new Claim("finansRaporlariGorebilsin", yetki.FinansRaporlariGorebilsin ?? "0"));
+
+            // Entegrasyon Yetkileri
+            claims.Add(new Claim("driveEntegrasyonuGorebilsin", yetki.DriveEntegrasyonuGorebilsin ?? "0"));
+
+            // Yakalama Yetkileri
+            claims.Add(new Claim("policeYakalamaSecenekleri", yetki.PoliceYakalamaSecenekleri ?? "0"));
         }
         else
         {
@@ -223,6 +261,25 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             claims.Add(new Claim("produktorleriGorebilsin", "0"));
             claims.Add(new Claim("gorebilecegiPoliceler", "3")); // Sadece kendi poliçeleri
             claims.Add(new Claim("kazanclarimGorebilsin", "0"));
+
+            // Müşteri Yetkileri
+            claims.Add(new Claim("musterileriGorebilsin", "0"));
+            claims.Add(new Claim("musteriListesiGorebilsin", "0"));
+            claims.Add(new Claim("musteriDetayGorebilsin", "0"));
+            claims.Add(new Claim("yenilemeTakibiGorebilsin", "0"));
+
+            // Finans Yetkileri
+            claims.Add(new Claim("finansSayfasiniGorebilsin", "0"));
+            claims.Add(new Claim("finansDashboardGorebilsin", "0"));
+            claims.Add(new Claim("policeOdemeleriGorebilsin", "0"));
+            claims.Add(new Claim("tahsilatTakibiGorebilsin", "0"));
+            claims.Add(new Claim("finansRaporlariGorebilsin", "0"));
+
+            // Entegrasyon Yetkileri
+            claims.Add(new Claim("driveEntegrasyonuGorebilsin", "0"));
+
+            // Yakalama Yetkileri
+            claims.Add(new Claim("policeYakalamaSecenekleri", "0"));
         }
 
         var token = new JwtSecurityToken(

@@ -51,7 +51,7 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
             permissions = new PermissionsDto
             {
                 // Poliçe Yetkileri
-                GorebilecegiPoliceler = yetki.GorebilecegiPolicelerveKartlar,
+                GorebilecegiPolicelerveKartlar = yetki.GorebilecegiPolicelerveKartlar,
                 PoliceDuzenleyebilsin = yetki.PoliceDuzenleyebilsin,
                 PoliceHavuzunuGorebilsin = yetki.PoliceHavuzunuGorebilsin,
                 PoliceAktarabilsin = yetki.PoliceAktarabilsin,
@@ -102,7 +102,7 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, U
         return new PermissionsDto
         {
             // Policy Permissions
-            GorebilecegiPoliceler = "1",
+            GorebilecegiPolicelerveKartlar = "1",
             PoliceDuzenleyebilsin = "1",
             PoliceHavuzunuGorebilsin = "1",
             PoliceAktarabilsin = "1",
