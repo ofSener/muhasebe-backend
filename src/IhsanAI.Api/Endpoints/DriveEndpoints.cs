@@ -33,6 +33,41 @@ public static class DriveEndpoints
         .WithName("GetDriveHistory")
         .WithDescription("Yukleme gecmisini getirir");
 
+        // GET - Get drive link by policeId (CanViewCapturedPolicies yetkisi olan herkes erişebilir)
+        app.MapGet("/api/drive/by-police/{policeId}", async (string policeId, IApplicationDbContext context, ICurrentUserService currentUserService) =>
+        {
+            var firmaId = currentUserService.FirmaId;
+            if (firmaId == null)
+            {
+                return Results.BadRequest(new { Success = false, Error = "Firma bilgisi bulunamadi." });
+            }
+
+            var uploadLog = await context.DriveUploadLogs
+                .Where(l => l.PoliceId == policeId
+                         && l.FirmaId == firmaId
+                         && l.UploadStatus == UploadStatus.Success)
+                .OrderByDescending(l => l.UploadedAt)
+                .FirstOrDefaultAsync();
+
+            if (uploadLog == null)
+            {
+                return Results.Ok(new { Success = false, Found = false });
+            }
+
+            return Results.Ok(new {
+                Success = true,
+                Found = true,
+                FileId = uploadLog.DriveFileId,
+                WebViewLink = uploadLog.DriveWebViewLink,
+                FileName = uploadLog.FileName,
+                UploadedAt = uploadLog.UploadedAt
+            });
+        })
+        .WithName("GetDriveLinkByPoliceId")
+        .WithDescription("PoliceId ile Drive linkini getirir")
+        .WithTags("Drive")
+        .RequireAuthorization();
+
         // POST - Initiate OAuth connection
         group.MapPost("/connect", async (HttpContext httpContext, IMediator mediator) =>
         {
@@ -66,7 +101,7 @@ public static class DriveEndpoints
         .WithDescription("Drive baglantisini keser");
 
         // Simple upload endpoint for external systems (uses firmaId from query)
-        app.MapPost("/api/drive/upload-external", async (int firmaId, IFormFile file, IMediator mediator, IApplicationDbContext context, IGoogleDriveService driveService, IDateTimeService dateTimeService) =>
+        app.MapPost("/api/drive/upload-external", async (int firmaId, string? policeId, IFormFile file, IMediator mediator, IApplicationDbContext context, IGoogleDriveService driveService, IDateTimeService dateTimeService) =>
         {
             // Validate PDF only
             if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
@@ -79,6 +114,27 @@ public static class DriveEndpoints
             if (file.Length > 10 * 1024 * 1024)
             {
                 return Results.BadRequest(new { Success = false, Error = "Dosya boyutu 10MB'i asamaz." });
+            }
+
+            // Aynı policeId + firmaId ile daha önce başarılı yükleme yapılmış mı kontrol et
+            if (!string.IsNullOrEmpty(policeId))
+            {
+                var existingUpload = await context.DriveUploadLogs
+                    .FirstOrDefaultAsync(l => l.PoliceId == policeId
+                                           && l.FirmaId == firmaId
+                                           && l.UploadStatus == UploadStatus.Success);
+
+                if (existingUpload != null)
+                {
+                    return Results.Ok(new {
+                        Success = true,
+                        FileId = existingUpload.DriveFileId,
+                        WebViewLink = existingUpload.DriveWebViewLink,
+                        DrivePath = existingUpload.DriveFolderPath,
+                        PoliceId = policeId,
+                        AlreadyExists = true
+                    });
+                }
             }
 
             // Check if firm has active Drive connection
@@ -102,7 +158,8 @@ public static class DriveEndpoints
                 FileSizeBytes = file.Length,
                 DriveFolderPath = drivePath,
                 UploadStatus = UploadStatus.Pending,
-                UploadedAt = now
+                UploadedAt = now,
+                PoliceId = policeId
             };
 
             context.DriveUploadLogs.Add(uploadLog);
@@ -125,7 +182,9 @@ public static class DriveEndpoints
                         Success = true,
                         FileId = result.FileId,
                         WebViewLink = result.WebViewLink,
-                        DrivePath = drivePath
+                        DrivePath = drivePath,
+                        PoliceId = policeId,
+                        AlreadyExists = false
                     });
                 }
                 return Results.BadRequest(new { Success = false, Error = result.ErrorMessage });
@@ -141,7 +200,7 @@ public static class DriveEndpoints
         .WithName("UploadToDriveExternal")
         .WithDescription("Harici sistemlerden PDF yuklemek icin (firmaId query parametresi ile)")
         .DisableAntiforgery()
-        .RequireAuthorization("CanAccessDriveIntegration");
+        .RequireAuthorization();
 
         // OAuth callback - Anonymous (no auth required for Google redirect)
         app.MapGet("/api/drive/oauth/callback", async (HttpContext httpContext, string code, string state, IMediator mediator, IConfiguration configuration) =>
