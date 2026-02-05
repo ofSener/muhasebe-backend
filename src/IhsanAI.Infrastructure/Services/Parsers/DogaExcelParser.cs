@@ -146,12 +146,30 @@ public class DogaExcelParser : BaseExcelParser
             var iptKay = GetStringValue(row, "İpt/Kay", "IPT/KAY", "Ipt/Kay")?.Trim().ToUpperInvariant();
             var iptalDurumu = GetStringValue(row, "İptal", "IPTAL", "Iptal")?.Trim().ToUpperInvariant();
 
-            // Poliçe tipi belirleme
-            var policeTipi = GetPoliceTipi(row, iptKay, iptalDurumu);
+            // Poliçe tipi belirleme (İptal kontrolü)
+            var isIptal = IsIptalPolicy(iptKay, iptalDurumu);
+            var policeTipi = isIptal ? "İPTAL" : "TAHAKKUK";
 
-            // Sigortalı bilgileri
+            // Sigortalı bilgileri - Ad ve Soyadı birleştir
             var sigortaliAdi = GetStringValue(row, "Sigortalı Adı", "SİGORTALI ADI", "Sigortali Adi")?.Trim();
             var sigortaliSoyadi = GetStringValue(row, "Sigortalı Soyadı", "SİGORTALI SOYADI", "Sigortali Soyadi")?.Trim();
+            var sigortaliTam = CombineNames(sigortaliAdi, sigortaliSoyadi);
+
+            // Primler
+            var brutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "Brut Prim", "BRUT PRIM");
+            var netPrim = GetDecimalValue(row, "Net Prim", "NET PRİM", "NET PRIM");
+            var komisyon = GetDecimalValue(row, "Komisyon", "KOMİSYON", "KOMISYON");
+
+            // İptal ise pozitif primleri negatife çevir
+            if (isIptal)
+            {
+                if (brutPrim.HasValue && brutPrim > 0)
+                    brutPrim = -brutPrim;
+                if (netPrim.HasValue && netPrim > 0)
+                    netPrim = -netPrim;
+                if (komisyon.HasValue && komisyon > 0)
+                    komisyon = -komisyon;
+            }
 
             var dto = new ExcelImportRowDto
             {
@@ -174,13 +192,13 @@ public class DogaExcelParser : BaseExcelParser
                 ZeyilBaslangicTarihi = isZeyil ? baslangicTarihi : null,
 
                 // Primler
-                BrutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "Brut Prim", "BRUT PRIM"),
-                NetPrim = GetDecimalValue(row, "Net Prim", "NET PRİM", "NET PRIM"),
-                Komisyon = GetDecimalValue(row, "Komisyon", "KOMİSYON", "KOMISYON"),
+                BrutPrim = brutPrim,
+                NetPrim = netPrim,
+                Komisyon = komisyon,
 
                 // Müşteri Bilgileri
-                SigortaliAdi = sigortaliAdi,
-                SigortaliSoyadi = sigortaliSoyadi,
+                SigortaliAdi = sigortaliTam,
+                SigortaliSoyadi = null,  // Ad ve soyad birleştirildi
                 Tckn = null,             // Doğa Excel'de TC yok
                 Vkn = null,              // Doğa Excel'de VKN yok
                 Adres = null,            // Doğa Excel'de adres yok
@@ -229,24 +247,35 @@ public class DogaExcelParser : BaseExcelParser
     }
 
     /// <summary>
-    /// Poliçe tipini belirler (TAHAKKUK/İPTAL)
+    /// İptal poliçesi mi kontrol eder
     /// </summary>
-    private string GetPoliceTipi(IDictionary<string, object?> row, string? iptKay, string? iptalDurumu)
+    private static bool IsIptalPolicy(string? iptKay, string? iptalDurumu)
     {
         // İpt/Kay kolonu "İ" ise iptal
         if (iptKay == "İ" || iptKay == "I")
-            return "İPTAL";
+            return true;
 
         // İptal kolonu "E" (Evet) ise iptal
         if (iptalDurumu == "E")
-            return "İPTAL";
+            return true;
 
-        // Brüt prim negatifse iptal
-        var brutPrim = GetDecimalValue(row, "Brüt Prim", "BRÜT PRİM", "Brut Prim", "BRUT PRIM");
-        if (brutPrim < 0)
-            return "İPTAL";
+        return false;
+    }
 
-        return "TAHAKKUK";
+    /// <summary>
+    /// Ad ve soyadı birleştirir
+    /// </summary>
+    private static string? CombineNames(string? adi, string? soyadi)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(adi))
+            parts.Add(adi.Trim());
+
+        if (!string.IsNullOrWhiteSpace(soyadi))
+            parts.Add(soyadi.Trim());
+
+        return parts.Count > 0 ? string.Join(" ", parts) : null;
     }
 
     protected override List<string> ValidateRow(ExcelImportRowDto row)
