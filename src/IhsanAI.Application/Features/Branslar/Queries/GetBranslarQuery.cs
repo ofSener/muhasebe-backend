@@ -20,7 +20,7 @@ public class GetBranslarQueryHandler : IRequestHandler<GetBranslarQuery, List<Br
     public async Task<List<BransDto>> Handle(GetBranslarQuery request, CancellationToken cancellationToken)
     {
         return await _context.PoliceTurleri
-            .OrderBy(x => x.Turu)
+            .OrderBy(x => x.Id)
             .Select(x => new BransDto(x.Id, x.Turu ?? string.Empty))
             .AsNoTracking()
             .ToListAsync(cancellationToken);

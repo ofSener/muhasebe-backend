@@ -21,6 +21,10 @@ public interface IApplicationDbContext
     DbSet<Firma> Firmalar { get; }
     DbSet<AcenteKodu> AcenteKodlari { get; }
     DbSet<KomisyonOrani> KomisyonOranlari { get; }
+    DbSet<KomisyonGrubu> KomisyonGruplari { get; }
+    DbSet<KomisyonKurali> KomisyonKurallari { get; }
+    DbSet<KomisyonGrubuUyesi> KomisyonGrubuUyeleri { get; }
+    DbSet<KomisyonGrubuSubesi> KomisyonGrubuSubeleri { get; }
     DbSet<FirmaDriveToken> FirmaDriveTokens { get; }
     DbSet<DriveUploadLog> DriveUploadLogs { get; }
     DbSet<Brans> Branslar { get; }

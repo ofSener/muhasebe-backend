@@ -29,6 +29,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Firma> Firmalar => Set<Firma>();
     public DbSet<AcenteKodu> AcenteKodlari => Set<AcenteKodu>();
     public DbSet<KomisyonOrani> KomisyonOranlari => Set<KomisyonOrani>();
+    public DbSet<KomisyonGrubu> KomisyonGruplari => Set<KomisyonGrubu>();
+    public DbSet<KomisyonKurali> KomisyonKurallari => Set<KomisyonKurali>();
+    public DbSet<KomisyonGrubuUyesi> KomisyonGrubuUyeleri => Set<KomisyonGrubuUyesi>();
+    public DbSet<KomisyonGrubuSubesi> KomisyonGrubuSubeleri => Set<KomisyonGrubuSubesi>();
     public DbSet<FirmaDriveToken> FirmaDriveTokens => Set<FirmaDriveToken>();
     public DbSet<DriveUploadLog> DriveUploadLogs => Set<DriveUploadLog>();
     public DbSet<Brans> Branslar => Set<Brans>();
