@@ -10,7 +10,7 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// - Row 2+: Veriler
 ///
 /// KOLONLAR:
-/// Col 1: Branş (310=Kasko, 340=Trafik, vb.)
+/// Col 1: Branş (310=Trafik, 340=Kasko, vb.)
 /// Col 2: Acente
 /// Col 3: Acente Açık/Kapalı
 /// Col 4: Tali
@@ -46,15 +46,18 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// Col 34: Poliçe Zeyil Key
 ///
 /// BRANŞ KODU EŞLEŞTİRME (Doğa Kodu → BransId):
-/// 310 → 1 (Kasko)
-/// 340 → 0 (Trafik)
-/// 318 → 3 (DASK)
+/// 310 → 0 (Trafik), 340/346 → 1 (Kasko), 750 → 27 (Yeşil Kart)
+/// 251/255/256/258/259/260/262/265/268/269 → 3 (Ferdi Kaza), 263 → 4 (Koltuk)
+/// 420 → 6 (Nakliyat), 615 → 7 (Sağlık), 298/299/300/302 → 8 (Seyahat Sağlık)
+/// 270 → 9 (İşyeri), 610 → 16 (Tamamlayıcı Sağlık), 600 → 17 (Yabancı Sağlık)
+/// 510/520/530/540/544 → 28 (Mühendislik), 280/281/286 → 29 (Sorumluluk)
+/// 285 → 31 (Tehlikeli Madde), 277 → 32 (Tıbbi Sorumluluk), 301 → 33 (Eğitim)
 /// </summary>
 public class DogaExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 104;
     public override string SirketAdi => "Doğa Sigorta";
-    public override string[] FileNamePatterns => new[] { "doga", "doğa", "raporsonuc" };
+    public override string[] FileNamePatterns => new[] { "doga", "doğa" };
 
     protected override string[] RequiredColumns => new[]
     {
@@ -72,17 +75,56 @@ public class DogaExcelParser : BaseExcelParser
     /// </summary>
     private static readonly Dictionary<string, int> BransKoduMapping = new()
     {
-        { "310", 1 },   // Kasko
-        { "340", 0 },   // Trafik
-        { "318", 3 },   // DASK
-        { "320", 2 },   // Konut
-        { "350", 8 },   // Ferdi Kaza
-        { "360", 9 },   // Sorumluluk
-        { "370", 5 },   // Nakliyat
-        { "380", 4 },   // İşyeri
-        { "390", 7 },   // Hayat
-        { "410", 6 },   // Sağlık
-        { "420", 16 },  // Tamamlayıcı Sağlık
+        // Trafik & Kasko
+        { "310", 0 },   // Trafik
+        { "340", 1 },   // Kasko
+        { "346", 1 },   // Kasko
+        { "750", 27 },  // Yeşil Kart
+
+        // Ferdi Kaza
+        { "251", 3 },   // Ferdi Kaza
+        { "255", 3 },   // Ferdi Kaza
+        { "256", 3 },   // Ferdi Kaza
+        { "258", 3 },   // Ferdi Kaza
+        { "259", 3 },   // Ferdi Kaza
+        { "260", 3 },   // Ferdi Kaza
+        { "262", 3 },   // Ferdi Kaza
+        { "265", 3 },   // Ferdi Kaza
+        { "268", 3 },   // Ferdi Kaza
+        { "269", 3 },   // Ferdi Kaza
+
+        // Koltuk
+        { "263", 4 },   // Koltuk
+
+        // Nakliyat
+        { "420", 6 },   // Nakliyat
+
+        // Sağlık
+        { "615", 7 },   // Sağlık
+        { "298", 8 },   // Seyahat Sağlık
+        { "299", 8 },   // Seyahat Sağlık
+        { "300", 8 },   // Seyahat Sağlık
+        { "302", 8 },   // Seyahat Sağlık
+        { "610", 16 },  // Tamamlayıcı Sağlık
+        { "600", 17 },  // Yabancı Sağlık
+
+        // İşyeri & Sorumluluk
+        { "270", 9 },   // İşyeri
+        { "280", 29 },  // Sorumluluk
+        { "281", 29 },  // Sorumluluk
+        { "286", 29 },  // Sorumluluk
+        { "285", 31 },  // Tehlikeli Madde
+        { "277", 32 },  // Tıbbi Sorumluluk
+
+        // Mühendislik
+        { "510", 28 },  // Mühendislik
+        { "520", 28 },  // Mühendislik
+        { "530", 28 },  // Mühendislik
+        { "540", 28 },  // Mühendislik
+        { "544", 28 },  // Mühendislik
+
+        // Eğitim
+        { "301", 33 },  // Eğitim
     };
 
     /// <summary>
@@ -90,17 +132,56 @@ public class DogaExcelParser : BaseExcelParser
     /// </summary>
     private static readonly Dictionary<string, string> BransAdiMapping = new()
     {
-        { "310", "KASKO" },
-        { "340", "TRAFİK" },
-        { "318", "DASK" },
-        { "320", "KONUT" },
-        { "350", "FERDİ KAZA" },
-        { "360", "SORUMLULUK" },
-        { "370", "NAKLİYAT" },
-        { "380", "İŞYERİ" },
-        { "390", "HAYAT" },
-        { "410", "SAĞLIK" },
-        { "420", "TAMAMLAYICI SAĞLIK" },
+        // Trafik & Kasko
+        { "310", "TRAFİK" },
+        { "340", "KASKO" },
+        { "346", "KASKO" },
+        { "750", "YEŞİL KART" },
+
+        // Ferdi Kaza
+        { "251", "FERDİ KAZA" },
+        { "255", "FERDİ KAZA" },
+        { "256", "FERDİ KAZA" },
+        { "258", "FERDİ KAZA" },
+        { "259", "FERDİ KAZA" },
+        { "260", "FERDİ KAZA" },
+        { "262", "FERDİ KAZA" },
+        { "265", "FERDİ KAZA" },
+        { "268", "FERDİ KAZA" },
+        { "269", "FERDİ KAZA" },
+
+        // Koltuk
+        { "263", "KOLTUK" },
+
+        // Nakliyat
+        { "420", "NAKLİYAT" },
+
+        // Sağlık
+        { "615", "SAĞLIK" },
+        { "298", "SEYAHAT SAĞLIK" },
+        { "299", "SEYAHAT SAĞLIK" },
+        { "300", "SEYAHAT SAĞLIK" },
+        { "302", "SEYAHAT SAĞLIK" },
+        { "610", "TAMAMLAYICI SAĞLIK" },
+        { "600", "YABANCI SAĞLIK" },
+
+        // İşyeri & Sorumluluk
+        { "270", "İŞYERİ" },
+        { "280", "SORUMLULUK" },
+        { "281", "SORUMLULUK" },
+        { "286", "SORUMLULUK" },
+        { "285", "TEHLİKELİ MADDE" },
+        { "277", "TIBBİ SORUMLULUK" },
+
+        // Mühendislik
+        { "510", "MÜHENDİSLİK" },
+        { "520", "MÜHENDİSLİK" },
+        { "530", "MÜHENDİSLİK" },
+        { "540", "MÜHENDİSLİK" },
+        { "544", "MÜHENDİSLİK" },
+
+        // Eğitim
+        { "301", "EĞİTİM" },
     };
 
     public override List<ExcelImportRowDto> Parse(IEnumerable<IDictionary<string, object?>> rows)
@@ -119,12 +200,17 @@ public class DogaExcelParser : BaseExcelParser
             if (string.IsNullOrWhiteSpace(bransKodu))
                 continue;
 
-            if (bransKodu.Contains("Branş", StringComparison.OrdinalIgnoreCase))
+            // Branş sayısal olmalı (310, 340 gibi) - özet satırlarını atla
+            if (!int.TryParse(bransKodu, out _))
                 continue;
 
             // Poliçe No
             var policeNo = GetStringValue(row, "Poliçe No", "POLİÇE NO", "Police No", "POLICE NO")?.Trim();
             if (string.IsNullOrWhiteSpace(policeNo))
+                continue;
+
+            // Poliçe No sayısal olmalı - özet satırlarını atla
+            if (!long.TryParse(policeNo, out _))
                 continue;
 
             // Zeyil kontrolü
