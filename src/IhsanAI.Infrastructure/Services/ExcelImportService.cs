@@ -37,19 +37,27 @@ public class ExcelImportService : IExcelImportService
         _cache = cache;
         _logger = logger;
 
-        // Parser'ları kaydet
+        // Parser'ları kaydet - SIRA ÖNEMLİ: Spesifik signature'lar önce, genel olanlar sona
+        // Bidirectional Contains matching yüzünden genel kolonlar ("Ürün No", "Sigortalı Ünvanı" vb.)
+        // yanlış eşleşme yapabilir. Daha spesifik/benzersiz signature'a sahip parser'lar önce kontrol edilmeli.
         _parsers = new List<IExcelParser>
         {
-            new SompoExcelParser(),
-            new AnkaraExcelParser(),
-            new QuickExcelParser(),
-            new HepiyiExcelParser(),
-            new NeovaExcelParser(),
-            new UnicoExcelParser(),
-            new KoruExcelParser(),   // Koru, Doğa'dan önce olmalı (aynı yapı + "Sepet Id" ile ayırt edilir)
-            new DogaExcelParser(),   // Doğa, HDI'dan önce olmalı (aynı kolon yapısı, Doğa daha spesifik signature'a sahip: "Sbm Havuz")
-            new HdiExcelParser(),
-            new AkExcelParser()
+            // --- En spesifik signature'lar (benzersiz kolon adları) ---
+            new NeovaExcelParser(),     // 4 benzersiz sig: "KOD", "G/T", "MÜŞTERİ TCKN / VKN", "P/T/R"
+            new CorpusExcelParser(),    // 3 benzersiz sig: "ACENTA POL NO", "ORTAKLIK_BEDELI", "SİGORTALI ÜNVANI"
+            new QuickExcelParser(),     // 2 benzersiz sig: "UrunAd", "AcenteKomisyon" (camelCase)
+            new HepiyiExcelParser(),    // 3 sig: "Police Tür Kod" benzersiz
+            new UnicoExcelParser(),     // 3 sig: "Tarife Adı" benzersiz
+            new AnkaraExcelParser(),    // 2 sig: "Partaj Adı" benzersiz
+            new AkExcelParser(),        // 3 sig: "BAS/YUK" benzersiz
+
+            // --- Ortak kolonlu grup (İpt/Kay, Vade Başlangıç) - spesifikten genele ---
+            new KoruExcelParser(),      // 4 sig: Doğa + "Sepet Id" (Koru'ya özgü) → Doğa'dan önce
+            new DogaExcelParser(),      // 4 sig: "Sbm Havuz" (HDI'da yok) → HDI'dan önce
+            new HdiExcelParser(),       // 3 sig: "Tecdit No" benzersiz ama İpt/Kay+Vade ortak
+
+            // --- En genel signature (yaygın kolon adları) - en sona ---
+            new SompoExcelParser()      // 3 sig: "Ürün No", "Sigortalı Ünvanı", "Döviz Cinsi" (çok genel, birçok Excel'de bulunur)
         };
 
         // XML Parsers
