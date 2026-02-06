@@ -37,7 +37,7 @@ public class QuickExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 110;
     public override string SirketAdi => "Quick Sigorta";
-    public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck"};
+    public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck" };
 
     // Ana sayfa: PoliceListesi
     public override string? MainSheetName => "PoliceListesi";
@@ -52,9 +52,11 @@ public class QuickExcelParser : BaseExcelParser
     };
 
     // Quick'e özgü kolonlar - içerik bazlı tespit için
+    // "UrunAd" + "AcenteKomisyon" kombinasyonu sadece Quick'te var
+    // NormalizeColumnName ile camelCase/UPPER_CASE fark etmez
     protected override string[] SignatureColumns => new[]
     {
-        "POLICE_HAREKET_NO", "EKBELGE_NO"  // Bu kombinasyon sadece Quick Police_Listesi'nde var
+        "UrunAd", "AcenteKomisyon"
     };
 
     /// <summary>
