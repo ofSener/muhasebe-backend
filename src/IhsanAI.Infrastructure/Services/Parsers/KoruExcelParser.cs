@@ -20,7 +20,8 @@ namespace IhsanAI.Infrastructure.Services.Parsers;
 /// 253/260/261/282/289/293/297 → 3 (Ferdi Kaza), 354 → 5 (Konut)
 /// 400/416/417/421/424 → 6 (Nakliyat), 298 → 8 (Seyahat Sağlık)
 /// 152 → 9 (İşyeri), 325 → 12 (IMM), 200 → 24 (Hukuksal Koruma)
-/// 450 → 25 (Tekne), 510/530/540 → 28 (Mühendislik)
+/// 450 → 25 (Tekne), 510/530/540/545 → 28 (Mühendislik)
+/// 115/122/131/135/153/154/155/156 → 21 (Yangın)
 /// 251/252/281 → 29 (Sorumluluk), 385 → 33 (Eğitim)
 /// </summary>
 public class KoruExcelParser : DogaExcelParser
@@ -92,6 +93,17 @@ public class KoruExcelParser : DogaExcelParser
         { "510", 28 },
         { "530", 28 },
         { "540", 28 },
+        { "545", 28 },
+
+        // Yangın
+        { "115", 21 },
+        { "122", 21 },
+        { "131", 21 },
+        { "135", 21 },
+        { "153", 21 },
+        { "154", 21 },
+        { "155", 21 },
+        { "156", 21 },
 
         // Sorumluluk
         { "251", 29 },
@@ -159,6 +171,17 @@ public class KoruExcelParser : DogaExcelParser
         { "510", "MÜHENDİSLİK" },
         { "530", "MÜHENDİSLİK" },
         { "540", "MÜHENDİSLİK" },
+        { "545", "MÜHENDİSLİK" },
+
+        // Yangın
+        { "115", "YANGIN" },
+        { "122", "YANGIN" },
+        { "131", "YANGIN" },
+        { "135", "YANGIN" },
+        { "153", "YANGIN" },
+        { "154", "YANGIN" },
+        { "155", "YANGIN" },
+        { "156", "YANGIN" },
 
         // Sorumluluk
         { "251", "SORUMLULUK" },
@@ -168,8 +191,6 @@ public class KoruExcelParser : DogaExcelParser
         // Eğitim
         { "385", "EĞİTİM" },
 
-        // UTTTS
-        { "545", "UTTTS" },
     };
 
     protected override int? GetBransIdFromKod(string? bransKodu)
