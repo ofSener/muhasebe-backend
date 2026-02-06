@@ -124,6 +124,26 @@ public static class DashboardEndpoints
         .WithDescription("Sigorta şirketlerine göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan")
         .RequireAuthorization("CanViewFinanceDashboard");
 
+        // Şube dağılımı
+        group.MapGet("/sube-dagilim", async (
+            int? firmaId,
+            DateTime? startDate,
+            DateTime? endDate,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
+            DashboardMode? mode,
+            IMediator mediator) =>
+        {
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetSubeDagilimQuery(firmaId, startDate, endDate, mode ?? DashboardMode.Onayli, filters));
+            return Results.Ok(result);
+        })
+        .WithName("GetSubeDagilim")
+        .WithDescription("Şubelere göre poliçe dağılımını getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
+
         return app;
     }
 }
