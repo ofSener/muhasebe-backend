@@ -68,6 +68,40 @@ public static class DriveEndpoints
         .WithTags("Drive")
         .RequireAuthorization();
 
+        // POST - Get drive links for multiple policeIds (batch)
+        app.MapPost("/api/drive/by-police-batch", async (BatchDriveLinkRequest request, IApplicationDbContext context, ICurrentUserService currentUserService) =>
+        {
+            var firmaId = currentUserService.FirmaId;
+            if (firmaId == null)
+            {
+                return Results.BadRequest(new { Success = false, Error = "Firma bilgisi bulunamadi." });
+            }
+
+            if (request.PoliceIds == null || request.PoliceIds.Count == 0)
+            {
+                return Results.Ok(new { Links = new Dictionary<string, string>() });
+            }
+
+            var links = await context.DriveUploadLogs
+                .Where(l => request.PoliceIds.Contains(l.PoliceId!)
+                         && l.FirmaId == firmaId
+                         && l.UploadStatus == UploadStatus.Success
+                         && l.DriveWebViewLink != null)
+                .GroupBy(l => l.PoliceId!)
+                .Select(g => new
+                {
+                    PoliceId = g.Key,
+                    WebViewLink = g.OrderByDescending(l => l.UploadedAt).First().DriveWebViewLink!
+                })
+                .ToDictionaryAsync(x => x.PoliceId, x => x.WebViewLink);
+
+            return Results.Ok(new { Links = links });
+        })
+        .WithName("GetDriveLinksByPoliceIds")
+        .WithDescription("Birden fazla PoliceId icin Drive linklerini toplu getirir")
+        .WithTags("Drive")
+        .RequireAuthorization();
+
         // POST - Initiate OAuth connection
         group.MapPost("/connect", async (HttpContext httpContext, IMediator mediator) =>
         {
@@ -235,3 +269,5 @@ public static class DriveEndpoints
         return app;
     }
 }
+
+public record BatchDriveLinkRequest(List<string> PoliceIds);
