@@ -30,7 +30,7 @@ public class HdiExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 7;
     public override string SirketAdi => "HDI Sigorta";
-    public override string[] FileNamePatterns => new[] { "raporsonuc", "hdi", "rapor_sonuc" };
+    public override string[] FileNamePatterns => new[] { "hdi" };
 
     // HDI formatında header ilk satırda
     public override int? HeaderRowIndex => 1;

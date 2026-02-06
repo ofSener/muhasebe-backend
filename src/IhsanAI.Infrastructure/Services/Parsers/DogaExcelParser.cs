@@ -237,8 +237,11 @@ public class DogaExcelParser : BaseExcelParser
             var policeTipi = isIptal ? "İPTAL" : "TAHAKKUK";
 
             // Sigortalı bilgileri - Ad ve Soyadı birleştir
-            var sigortaliAdi = GetStringValue(row, "Sigortalı Adı", "SİGORTALI ADI", "Sigortali Adi")?.Trim();
-            var sigortaliSoyadi = GetStringValue(row, "Sigortalı Soyadı", "SİGORTALI SOYADI", "Sigortali Soyadi")?.Trim();
+            // NOT: GetStringValue Contains ile eşleştirir, "Sigortalı Adı" substring olarak
+            // "Sigortalı Soyadı"nda da bulunur. Bu yüzden önce soyadını alıyoruz,
+            // sonra adı alırken soyadı key'ini hariç tutuyoruz.
+            var sigortaliSoyadi = GetExactColumnValue(row, "Sigortalı Soyadı")?.Trim();
+            var sigortaliAdi = GetExactColumnValue(row, "Sigortalı Adı")?.Trim();
             var sigortaliTam = CombineNames(sigortaliAdi, sigortaliSoyadi);
 
             // Primler
@@ -306,6 +309,24 @@ public class DogaExcelParser : BaseExcelParser
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Kolon adıyla tam eşleşme yaparak değer döndürür (Contains yerine)
+    /// "Sigortalı Adı" / "Sigortalı Soyadı" gibi birbirini içeren kolon adları için gerekli
+    /// </summary>
+    private static string? GetExactColumnValue(IDictionary<string, object?> row, string columnName)
+    {
+        var normalized = NormalizeColumnName(columnName);
+        var key = row.Keys.FirstOrDefault(k => NormalizeColumnName(k) == normalized);
+
+        if (key != null && row.TryGetValue(key, out var value) && value != null)
+        {
+            var strValue = value.ToString()?.Trim();
+            if (!string.IsNullOrWhiteSpace(strValue))
+                return strValue;
+        }
+        return null;
     }
 
     /// <summary>

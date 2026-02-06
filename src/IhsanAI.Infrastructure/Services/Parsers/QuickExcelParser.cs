@@ -37,7 +37,7 @@ public class QuickExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 110;
     public override string SirketAdi => "Quick Sigorta";
-    public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck", "police_listesi", "policelistesi" };
+    public override string[] FileNamePatterns => new[] { "quick", "quıck", "qck"};
 
     // Ana sayfa: PoliceListesi
     public override string? MainSheetName => "PoliceListesi";

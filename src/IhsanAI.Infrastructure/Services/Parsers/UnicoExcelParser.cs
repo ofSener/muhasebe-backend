@@ -45,7 +45,7 @@ public class UnicoExcelParser : BaseExcelParser
 {
     public override int SigortaSirketiId => 17;
     public override string SirketAdi => "Unico Sigorta";
-    public override string[] FileNamePatterns => new[] { "unico", "aviva" };
+    public override string[] FileNamePatterns => new[] { "unico"};
 
     protected override string[] RequiredColumns => new[]
     {
