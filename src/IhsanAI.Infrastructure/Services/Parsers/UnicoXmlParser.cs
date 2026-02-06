@@ -48,7 +48,7 @@ public class UnicoXmlParser : IExcelParser
 {
     public int SigortaSirketiId => 17;
     public string SirketAdi => "Unico Sigorta";
-    public string[] FileNamePatterns => new[] { "unico", "aviva", "unicoxml" };
+    public string[] FileNamePatterns => new[] { "unico", "unicoxml" };
     public int? HeaderRowIndex => null;
     public string? MainSheetName => null;
     public string[]? AdditionalSheetNames => null;

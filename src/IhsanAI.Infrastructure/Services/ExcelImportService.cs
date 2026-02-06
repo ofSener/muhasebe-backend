@@ -46,6 +46,7 @@ public class ExcelImportService : IExcelImportService
             new HepiyiExcelParser(),
             new NeovaExcelParser(),
             new UnicoExcelParser(),
+            new DogaExcelParser(),   // Doğa, HDI'dan önce olmalı (aynı kolon yapısı, Doğa daha spesifik signature'a sahip: "Sbm Havuz")
             new HdiExcelParser(),
             new AkExcelParser()
         };

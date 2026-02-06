@@ -31,7 +31,7 @@ public class QuickXmlParser
 {
     public int SigortaSirketiId => 110;
     public string SirketAdi => "Quick Sigorta (XML)";
-    public string[] FileNamePatterns => new[] { "quick", "quıck", "qck", "policetransfer" };
+    public string[] FileNamePatterns => new[] { "quick", "quıck", "qck" };
 
     /// <summary>
     /// XML dosyasini parse eder

@@ -19,6 +19,7 @@ public static class EndpointExtensions
         app.MapYetkilerEndpoints();
         app.MapPoliceTurleriEndpoints();
         app.MapKomisyonOranlariEndpoints();
+        app.MapKomisyonGruplariEndpoints();
         app.MapPoliceRizikoAdresleriEndpoints();
         app.MapPoliceSigortalilariEndpoints();
         app.MapKazanclarEndpoints();
