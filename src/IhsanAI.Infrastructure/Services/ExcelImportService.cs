@@ -46,6 +46,7 @@ public class ExcelImportService : IExcelImportService
             new HepiyiExcelParser(),
             new NeovaExcelParser(),
             new UnicoExcelParser(),
+            new KoruExcelParser(),   // Koru, Doğa'dan önce olmalı (aynı yapı + "Sepet Id" ile ayırt edilir)
             new DogaExcelParser(),   // Doğa, HDI'dan önce olmalı (aynı kolon yapısı, Doğa daha spesifik signature'a sahip: "Sbm Havuz")
             new HdiExcelParser(),
             new AkExcelParser()
@@ -731,7 +732,7 @@ public class ExcelImportService : IExcelImportService
                     var headerRow = DetectHeaderRow(worksheet, parser);
                     headers.Clear();
 
-                    for (int col = 1; col <= Math.Min(30, worksheet.Dimension.End.Column); col++)
+                    for (int col = 1; col <= worksheet.Dimension.End.Column; col++)
                     {
                         var cellValue = worksheet.Cells[headerRow, col].Value?.ToString()?.Trim();
                         if (!string.IsNullOrEmpty(cellValue))
@@ -773,7 +774,7 @@ public class ExcelImportService : IExcelImportService
                     headers.Clear();
                     var headerRow = table.Rows[headerRowIdx - 1];
 
-                    for (int col = 0; col < Math.Min(30, table.Columns.Count); col++)
+                    for (int col = 0; col < table.Columns.Count; col++)
                     {
                         var cellValue = headerRow[col]?.ToString()?.Trim();
                         if (!string.IsNullOrEmpty(cellValue) && cellValue != "Unnamed")
@@ -1273,6 +1274,22 @@ public class ExcelImportService : IExcelImportService
     }
 
     /// <summary>
+    /// Türkçe karakterleri ASCII karşılıklarına dönüştürür (header tespiti için)
+    /// ToUpperInvariant() Türkçe 'i'→'I' yapar (İ değil), bu yüzden ayrıca normalize gerekli
+    /// </summary>
+    private static string NormalizeForHeaderDetection(string value)
+    {
+        return value
+            .ToUpperInvariant()
+            .Replace("İ", "I")   // Türkçe büyük İ → I
+            .Replace("Ç", "C")
+            .Replace("Ş", "S")
+            .Replace("Ö", "O")
+            .Replace("Ü", "U")
+            .Replace("Ğ", "G");
+    }
+
+    /// <summary>
     /// Excel worksheet için header satırını tespit eder (EPPlus - 1-indexed)
     /// </summary>
     private int DetectHeaderRow(ExcelWorksheet worksheet, IExcelParser parser)
@@ -1282,17 +1299,22 @@ public class ExcelImportService : IExcelImportService
             return parser.HeaderRowIndex.Value;
 
         // 2. İlk 10 satırda header keyword'lerini ara
-        var headerKeywords = new[] { "POLICE", "POLİÇE", "PRIM", "PRİM", "POLİCE NO", "POLİÇE NO" };
+        // Tüm keyword'ler ASCII - NormalizeForHeaderDetection ile karşılaştırılır
+        var headerKeywords = new[] { "POLICE", "POLICE NO", "PRIM" };
 
         for (int row = 1; row <= Math.Min(10, worksheet.Dimension.End.Row); row++)
         {
             for (int col = 1; col <= Math.Min(15, worksheet.Dimension.End.Column); col++)
             {
-                var val = worksheet.Cells[row, col].Value?.ToString()?.ToUpperInvariant();
-                if (val != null && headerKeywords.Any(k => val.Contains(k)))
+                var val = worksheet.Cells[row, col].Value?.ToString();
+                if (val != null)
                 {
-                    _logger.LogInformation("Auto-detected header row at {Row} based on keyword match: {Value}", row, val);
-                    return row;
+                    var normalized = NormalizeForHeaderDetection(val);
+                    if (headerKeywords.Any(k => normalized.Contains(k)))
+                    {
+                        _logger.LogInformation("Auto-detected header row at {Row} based on keyword match: {Value}", row, val);
+                        return row;
+                    }
                 }
             }
         }
@@ -1310,18 +1332,22 @@ public class ExcelImportService : IExcelImportService
             return parser.HeaderRowIndex.Value;
 
         // 2. İlk 10 satırda header keyword'lerini ara
-        var headerKeywords = new[] { "POLICE", "POLİÇE", "PRIM", "PRİM", "POLİCE NO", "POLİÇE NO" };
+        var headerKeywords = new[] { "POLICE", "POLICE NO", "PRIM" };
 
         for (int rowIdx = 0; rowIdx < Math.Min(10, table.Rows.Count); rowIdx++)
         {
             var dataRow = table.Rows[rowIdx];
             for (int col = 0; col < Math.Min(15, table.Columns.Count); col++)
             {
-                var val = dataRow[col]?.ToString()?.ToUpperInvariant();
-                if (val != null && headerKeywords.Any(k => val.Contains(k)))
+                var val = dataRow[col]?.ToString();
+                if (val != null)
                 {
-                    _logger.LogInformation("Auto-detected header row (xls) at {Row} based on keyword match: {Value}", rowIdx + 1, val);
-                    return rowIdx + 1; // 1-indexed döndür
+                    var normalized = NormalizeForHeaderDetection(val);
+                    if (headerKeywords.Any(k => normalized.Contains(k)))
+                    {
+                        _logger.LogInformation("Auto-detected header row (xls) at {Row} based on keyword match: {Value}", rowIdx + 1, val);
+                        return rowIdx + 1; // 1-indexed döndür
+                    }
                 }
             }
         }

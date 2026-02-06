@@ -332,7 +332,7 @@ public class DogaExcelParser : BaseExcelParser
     /// <summary>
     /// Branş kodundan BransId döndürür
     /// </summary>
-    private static int? GetBransIdFromKod(string? bransKodu)
+    protected virtual int? GetBransIdFromKod(string? bransKodu)
     {
         if (string.IsNullOrWhiteSpace(bransKodu))
             return null;
@@ -344,7 +344,7 @@ public class DogaExcelParser : BaseExcelParser
     /// <summary>
     /// Branş kodundan Branş adı döndürür
     /// </summary>
-    private static string? GetBransAdiFromKod(string? bransKodu)
+    protected virtual string? GetBransAdiFromKod(string? bransKodu)
     {
         if (string.IsNullOrWhiteSpace(bransKodu))
             return null;
