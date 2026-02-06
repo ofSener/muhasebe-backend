@@ -7,26 +7,22 @@ public static class EndpointExtensions
         // Auth endpoints (must be first, no auth required for login)
         app.MapAuthEndpoints();
 
+        // Core business endpoints (CQRS)
         app.MapYakalananPolicelerEndpoints();
         app.MapPolicelerEndpoints();
         app.MapPoliceHavuzlariEndpoints();
         app.MapMusterilerEndpoints();
         app.MapKullanicilarEndpoints();
-        app.MapSigortaSirketleriEndpoints();
-        app.MapSubelerEndpoints();
-        app.MapFirmalarEndpoints();
         app.MapAcenteKodlariEndpoints();
         app.MapYetkilerEndpoints();
-        app.MapPoliceTurleriEndpoints();
-        app.MapKomisyonOranlariEndpoints();
         app.MapKomisyonGruplariEndpoints();
-        app.MapPoliceRizikoAdresleriEndpoints();
-        app.MapPoliceSigortalilariEndpoints();
         app.MapKazanclarEndpoints();
         app.MapDriveEndpoints();
         app.MapDashboardEndpoints();
         app.MapExcelImportEndpoints();
-        app.MapBranslarEndpoints();
+
+        // Simple lookups (direct DB queries, no CQRS)
+        app.MapLookupEndpoints();
 
         return app;
     }

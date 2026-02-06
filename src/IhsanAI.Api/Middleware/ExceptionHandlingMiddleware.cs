@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using FluentValidation;
 using IhsanAI.Application.Common.Models;
 using IhsanAI.Application.Common.Exceptions;
 using IhsanAI.Domain.Exceptions;
@@ -43,10 +42,6 @@ public class ExceptionHandlingMiddleware
 
         var (statusCode, errors) = exception switch
         {
-            ValidationException validationException => (
-                HttpStatusCode.BadRequest,
-                validationException.Errors.Select(e => new Error(e.PropertyName, e.ErrorMessage))
-            ),
             DomainException domainException => (
                 HttpStatusCode.BadRequest,
                 new[] { new Error("DomainError", domainException.Message) }
