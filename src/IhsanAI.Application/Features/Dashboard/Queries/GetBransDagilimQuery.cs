@@ -28,8 +28,9 @@ public record DashboardFilters
     {
         if (string.IsNullOrEmpty(ids)) return new List<int>();
         return ids.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => int.TryParse(s.Trim(), out var id) ? id : 0)
-            .Where(id => id > 0)
+            .Select(s => int.TryParse(s.Trim(), out var id) ? (int?)id : null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
             .ToList();
     }
 
