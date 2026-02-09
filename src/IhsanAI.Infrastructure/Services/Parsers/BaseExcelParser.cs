@@ -1,6 +1,8 @@
-using IhsanAI.Application.Features.ExcelImport.Dtos;
 using System.Globalization;
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
+using IhsanAI.Application.Features.ExcelImport.Dtos;
 
 namespace IhsanAI.Infrastructure.Services.Parsers;
 
@@ -90,28 +92,24 @@ public abstract class BaseExcelParser : IExcelParser
     {
         if (string.IsNullOrEmpty(name)) return string.Empty;
 
-        // Türkçe karakterleri dönüştür ve küçük harfe çevir
-        // Önce büyük Türkçe karakterleri küçük harfe çevir (ToLowerInvariant bazılarını düzgün çevirmiyor)
-        return name
-            .Replace("İ", "i")  // Büyük İ (U+0130) - ToLowerInvariant düzgün çevirmiyor
-            .Replace("I", "i")  // Normal büyük I
-            .Replace("Ğ", "g")
-            .Replace("Ü", "u")
-            .Replace("Ş", "s")
-            .Replace("Ö", "o")
-            .Replace("Ç", "c")
-            .ToLowerInvariant()
-            .Replace("ı", "i")  // Küçük ı (U+0131)
-            .Replace("ğ", "g")
-            .Replace("ü", "u")
-            .Replace("ş", "s")
-            .Replace("ö", "o")
-            .Replace("ç", "c")
-            .Replace(" ", "")
-            .Replace("_", "")
-            .Replace("-", "")
-            .Replace("/", "")  // Slash'ları da kaldır
-            .Trim();
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            switch (c)
+            {
+                case 'İ': case 'I': case 'ı': sb.Append('i'); break;
+                case 'Ğ': case 'ğ': sb.Append('g'); break;
+                case 'Ü': case 'ü': sb.Append('u'); break;
+                case 'Ş': case 'ş': sb.Append('s'); break;
+                case 'Ö': case 'ö': sb.Append('o'); break;
+                case 'Ç': case 'ç': sb.Append('c'); break;
+                case ' ': case '_': case '-': case '/': break; // Ayraçları atla
+                default:
+                    sb.Append(char.ToLowerInvariant(c));
+                    break;
+            }
+        }
+        return sb.ToString();
     }
 
     protected static string? GetStringValue(IDictionary<string, object?> row, params string[] possibleColumns)
@@ -126,7 +124,7 @@ public abstract class BaseExcelParser : IExcelParser
             {
                 var strValue = value.ToString()?.Trim();
                 if (!string.IsNullOrWhiteSpace(strValue))
-                    return strValue;
+                    return WebUtility.HtmlEncode(strValue);
             }
         }
         return null;

@@ -1,3 +1,4 @@
+using System.Xml;
 using System.Xml.Linq;
 using IhsanAI.Application.Features.ExcelImport.Dtos;
 using IhsanAI.Infrastructure.Common;
@@ -42,7 +43,13 @@ public class QuickXmlParser
 
         try
         {
-            var doc = XDocument.Load(xmlStream);
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+            using var xmlReader = XmlReader.Create(xmlStream, settings);
+            var doc = XDocument.Load(xmlReader);
             var root = doc.Root;
 
             if (root == null)
@@ -429,7 +436,13 @@ public class QuickXmlParser
         try
         {
             var position = xmlStream.Position;
-            var doc = XDocument.Load(xmlStream);
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+            using var xmlReader = XmlReader.Create(xmlStream, settings);
+            var doc = XDocument.Load(xmlReader);
             xmlStream.Position = position;
 
             var root = doc.Root;

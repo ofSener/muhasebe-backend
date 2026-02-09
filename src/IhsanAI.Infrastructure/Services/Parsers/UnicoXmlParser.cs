@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml;
 using System.Xml.Linq;
 using IhsanAI.Application.Features.ExcelImport.Dtos;
 using IhsanAI.Infrastructure.Common;
@@ -109,7 +110,13 @@ public class UnicoXmlParser : IExcelParser
     public List<ExcelImportRowDto> ParseXml(Stream xmlStream)
     {
         var result = new List<ExcelImportRowDto>();
-        var doc = XDocument.Load(xmlStream);
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null
+        };
+        using var xmlReader = XmlReader.Create(xmlStream, settings);
+        var doc = XDocument.Load(xmlReader);
 
         // Root element'i bul (Policies veya başka bir isim olabilir)
         var policies = doc.Descendants("Policy").ToList();

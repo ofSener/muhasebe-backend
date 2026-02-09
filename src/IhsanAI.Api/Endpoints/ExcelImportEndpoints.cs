@@ -25,9 +25,9 @@ public static class ExcelImportEndpoints
             {
                 return Results.BadRequest(new { Success = false, Error = ex.Message });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return Results.BadRequest(new { Success = false, Error = "Dosya işlenirken bir hata oluştu: " + ex.Message });
+                return Results.BadRequest(new { Success = false, Error = "Dosya işlenirken bir hata oluştu. Lütfen dosya formatını kontrol edip tekrar deneyin." });
             }
         })
         .WithName("UploadExcelForPreview")

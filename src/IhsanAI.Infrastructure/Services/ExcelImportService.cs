@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Xml;
 using System.Xml.Linq;
 using ExcelDataReader;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +17,8 @@ namespace IhsanAI.Infrastructure.Services;
 
 public class ExcelImportService : IExcelImportService
 {
+    private static readonly string TempDirectory = Path.Combine(Path.GetTempPath(), "IhsanAI_Import");
+
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDateTimeService _dateTimeService;
@@ -23,6 +27,12 @@ public class ExcelImportService : IExcelImportService
     private readonly List<IExcelParser> _parsers;
     private readonly QuickXmlParser _quickXmlParser;
     private readonly UnicoXmlParser _unicoXmlParser;
+
+    static ExcelImportService()
+    {
+        // Startup: eski orphan temp dosyalarını temizle (1 saatten eski)
+        CleanupOldTempFiles();
+    }
 
     public ExcelImportService(
         IApplicationDbContext context,
@@ -132,11 +142,18 @@ public class ExcelImportService : IExcelImportService
                 fileStream.Position = 0; // Stream'i başa sar
             }
 
-            // 4. Hala bulunamadıysa default parser
+            // 4. Hala bulunamadıysa hata döndür
             if (parser == null)
             {
-                parser = _parsers.First(p => p.SirketAdi.Contains("Ankara"));
-                _logger.LogWarning("Parser otomatik tespit edilemedi, default parser kullanılıyor: {Parser}", parser.SirketAdi);
+                _logger.LogWarning("Parser otomatik tespit edilemedi: {FileName}", fileName);
+                return new ExcelImportPreviewDto
+                {
+                    TotalRows = 0,
+                    ValidRows = 0,
+                    InvalidRows = 0,
+                    Rows = new List<ExcelImportRowDto>(),
+                    DetectedFormat = "Bilinmeyen Format - Lütfen sigorta şirketini manuel seçin"
+                };
             }
 
             _logger.LogInformation("Parser seçildi: {Parser}", parser.SirketAdi);
@@ -179,19 +196,23 @@ public class ExcelImportService : IExcelImportService
             // Müşteri ve branş eşleştirmelerini yap
             await EnrichRowsWithLookupDataAsync(parsedRows);
 
-            // Session oluştur
+            // Session oluştur - satırları temp dosyaya yaz (bellek tasarrufu)
             var sessionId = Guid.NewGuid().ToString();
+            var tempFilePath = SaveRowsToTempFile(parsedRows);
             var cacheEntry = new ImportSessionData
             {
                 SessionId = sessionId,
+                UserId = _currentUserService.UserId ?? string.Empty,
                 FileName = fileName,
                 SigortaSirketiId = sigortaSirketiId ?? parser.SigortaSirketiId,
-                Rows = parsedRows,
+                TempFilePath = tempFilePath,
+                TotalRowCount = parsedRows.Count,
+                ValidRowCount = parsedRows.Count(r => r.IsValid),
                 CreatedAt = _dateTimeService.Now
             };
 
-            // Cache'e kaydet (30 dakika geçerli)
-            _cache.Set(sessionId, cacheEntry, TimeSpan.FromMinutes(30));
+            // Cache'e kaydet (30 dakika, PostEviction ile temp dosya temizlenir)
+            _cache.Set(sessionId, cacheEntry, CreateCacheOptions());
 
             // Sigorta şirketi adını al
             var sirket = await _context.SigortaSirketleri
@@ -230,46 +251,103 @@ public class ExcelImportService : IExcelImportService
             };
         }
 
+        // Session sahiplik kontrolü
+        if (!string.IsNullOrEmpty(session.UserId) && session.UserId != _currentUserService.UserId)
+        {
+            _logger.LogWarning("Session sahiplik hatası: SessionUserId={SessionUserId}, CurrentUserId={CurrentUserId}",
+                session.UserId, _currentUserService.UserId);
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = "Bu oturum size ait değil."
+            };
+        }
+
         var errors = new List<ExcelImportErrorDto>();
         var successCount = 0;
         var duplicateCount = 0;
         var newCustomersCreated = 0;
 
-        // Sadece geçerli satırları al
-        var validRows = session.Rows.Where(r => r.IsValid).ToList();
+        // Satırları al (temp dosyadan veya cache'ten)
+        var allRows = GetSessionRows(session);
+        var validRows = allRows.Where(r => r.IsValid).ToList();
+        _logger.LogInformation("Import: {TotalCount} satır, {ValidCount} geçerli", allRows.Count, validRows.Count);
 
+        if (validRows.Count == 0)
+        {
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = "İçe aktarılacak geçerli satır bulunamadı."
+            };
+        }
+
+        // --- PERFORMANS: Tüm sorguları döngü dışında yap ---
+
+        // Duplicate kontrolü için mevcut poliçeleri toplu çek
+        var allPoliceNos = validRows
+            .Where(r => !string.IsNullOrEmpty(r.PoliceNo))
+            .Select(r => r.PoliceNo!)
+            .Distinct()
+            .ToList();
+
+        var existingPolicies = await _context.PoliceHavuzlari
+            .Where(p => allPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
+            .Select(p => new { p.PoliceNo, p.ZeyilNo })
+            .ToListAsync();
+
+        var existingPolicyKeys = existingPolicies
+            .Select(p => $"{p.PoliceNo}_{p.ZeyilNo}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Müşteri lookup: isim ile toplu sorgula
+        var customerNames = validRows
+            .Where(r => !r.MusteriId.HasValue && !string.IsNullOrEmpty(r.SigortaliAdi))
+            .Select(r => r.SigortaliAdi!.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToList();
+
+        var customerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (customerNames.Count > 0)
+        {
+            var musteriler = await _context.Musteriler
+                .Where(m => m.Adi != null)
+                .Select(m => new { m.Id, m.Adi, m.Soyadi })
+                .ToListAsync();
+
+            foreach (var m in musteriler)
+            {
+                var fullName = ((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim().ToUpperInvariant();
+                var firstName = (m.Adi ?? "").Trim().ToUpperInvariant();
+                if (!string.IsNullOrEmpty(fullName) && !customerLookup.ContainsKey(fullName))
+                    customerLookup[fullName] = m.Id;
+                if (!string.IsNullOrEmpty(firstName) && !customerLookup.ContainsKey(firstName))
+                    customerLookup[firstName] = m.Id;
+            }
+        }
+
+        // Entity'leri hazırla
         foreach (var row in validRows)
         {
             try
             {
-                // Duplicate kontrolü
-                var existingPolice = await _context.PoliceHavuzlari
-                    .FirstOrDefaultAsync(p =>
-                        p.PoliceNo == row.PoliceNo &&
-                        p.SigortaSirketiId == session.SigortaSirketiId &&
-                        p.ZeyilNo == GetZeyilNoAsInt(row.ZeyilNo));
-
-                if (existingPolice != null)
+                // Duplicate kontrolü (memory'den)
+                var policyKey = $"{row.PoliceNo}_{GetZeyilNoAsInt(row.ZeyilNo)}";
+                if (existingPolicyKeys.Contains(policyKey))
                 {
                     duplicateCount++;
-                    // NOT: Mükerrerler errors listesine EKLENMİYOR - ayrı sayılıyor
                     continue;
                 }
+                existingPolicyKeys.Add(policyKey);
 
-                // Müşteri kontrolü - TC/VKN olmadan isim ile arama yapılabilir
+                // Müşteri kontrolü (memory'den)
                 var musteriId = row.MusteriId;
                 if (!musteriId.HasValue && !string.IsNullOrEmpty(row.SigortaliAdi))
                 {
-                    // İsim ile mevcut müşteri ara
                     var sigortaliAdi = row.SigortaliAdi.Trim().ToUpperInvariant();
-                    var existingMusteri = await _context.Musteriler
-                        .FirstOrDefaultAsync(m =>
-                            (m.Adi + " " + m.Soyadi).ToUpper() == sigortaliAdi ||
-                            m.Adi!.ToUpper() == sigortaliAdi);
-
-                    if (existingMusteri != null)
+                    if (customerLookup.TryGetValue(sigortaliAdi, out var foundMusteriId))
                     {
-                        musteriId = existingMusteri.Id;
+                        musteriId = foundMusteriId;
                     }
                 }
 
@@ -287,7 +365,7 @@ public class ExcelImportService : IExcelImportService
                     BitisTarihi = row.BitisTarihi ?? row.BaslangicTarihi?.AddYears(1) ?? _dateTimeService.Now.AddYears(1),
                     BrutPrim = row.BrutPrim ?? 0,
                     NetPrim = row.NetPrim ?? row.BrutPrim ?? 0,
-                    Vergi = 0,  // Vergi kaldırıldı
+                    Vergi = 0,
                     Komisyon = row.Komisyon ?? 0,
                     BransId = row.BransId ?? 0,
                     MusteriId = musteriId ?? 0,
@@ -318,7 +396,31 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        await _context.SaveChangesAsync();
+        // ExecutionStrategy ile transaction (MySqlRetryingExecutionStrategy uyumlu)
+        _logger.LogInformation("SaveChanges başlatılıyor: {Count} kayıt eklenecek", successCount);
+        var strategy = _context.Database.CreateExecutionStrategy();
+        try
+        {
+            await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
+        }
+        catch (Exception ex)
+        {
+            var innerMsg = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Import kaydetme hatası. Detay: {Detail}", innerMsg);
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = $"Veritabanına kaydetme hatası: {innerMsg}"
+            };
+        }
+
+        // Session ve temp dosyayı temizle
+        DeleteTempFile(session.TempFilePath);
         _cache.Remove(sessionId);
 
         _logger.LogInformation(
@@ -354,12 +456,25 @@ public class ExcelImportService : IExcelImportService
             };
         }
 
-        var errors = new List<ExcelImportErrorDto>();  // Sadece gerçek hatalar (exception)
+        // Session sahiplik kontrolü
+        if (!string.IsNullOrEmpty(session.UserId) && session.UserId != _currentUserService.UserId)
+        {
+            _logger.LogWarning("Batch session sahiplik hatası: SessionUserId={SessionUserId}, CurrentUserId={CurrentUserId}",
+                session.UserId, _currentUserService.UserId);
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = "Bu oturum size ait değil."
+            };
+        }
+
+        var errors = new List<ExcelImportErrorDto>();
         var successCount = 0;
         var duplicateCount = 0;
 
-        // Tüm geçerli satırları al
-        var allValidRows = session.Rows.Where(r => r.IsValid).ToList();
+        // Satırları al (ilk batch: temp dosyadan, sonraki batch'ler: hafızadan)
+        var allRows = GetSessionRows(session);
+        var allValidRows = allRows.Where(r => r.IsValid).ToList();
         var totalValidRows = allValidRows.Count;
 
         // Batch'i al
@@ -370,9 +485,10 @@ public class ExcelImportService : IExcelImportService
         // Batch boşsa (işlem bitti)
         if (batchRows.Count == 0)
         {
-            // Son batch ise session'ı temizle
+            // Son batch ise session ve temp dosyayı temizle
             if (!hasMoreBatches)
             {
+                DeleteTempFile(session.TempFilePath);
                 _cache.Remove(sessionId);
             }
 
@@ -391,44 +507,51 @@ public class ExcelImportService : IExcelImportService
             };
         }
 
-        // ===== PERFORMANS OPTİMİZASYONU =====
-        HashSet<string> existingPolicyKeys;
-        Dictionary<string, int> customerLookup;
-
-        try
+        // ===== DB LOOKUP: İlk batch'te yükle, sonrakiler cache'ten kullansın =====
+        if (session.CachedPolicyKeys == null)
         {
-            // Batch'teki tüm poliçe numaralarını topla
-            var batchPoliceNos = batchRows
+            // Tüm geçerli poliçe numaralarını topla (tüm batch'ler için)
+            var allPoliceNos = allValidRows
                 .Where(r => !string.IsNullOrEmpty(r.PoliceNo))
                 .Select(r => r.PoliceNo!)
                 .Distinct()
                 .ToList();
 
-            // Tek sorguda mevcut poliçeleri çek (duplicate kontrolü için)
             var existingPolicies = await _context.PoliceHavuzlari
-                .Where(p => batchPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
+                .Where(p => allPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
                 .Select(p => new { p.PoliceNo, p.ZeyilNo })
                 .ToListAsync();
 
-            // HashSet ile hızlı lookup (PoliceNo_ZeyilNo formatında)
-            existingPolicyKeys = existingPolicies
+            session.CachedPolicyKeys = existingPolicies
                 .Select(p => $"{p.PoliceNo}_{p.ZeyilNo}")
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Müşteri lookup - basitleştirildi
-            customerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         }
-        catch (Exception ex)
+
+        if (session.CachedCustomerLookup == null)
         {
-            _logger.LogError(ex, "Batch hazırlık hatası");
-            return new ExcelImportResultDto
-            {
-                Success = false,
-                ErrorMessage = $"Veritabanı sorgu hatası: {ex.Message}"
-            };
-        }
-        // ===== OPTİMİZASYON SONU =====
+            session.CachedCustomerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+            var musteriler = await _context.Musteriler
+                .Where(m => m.Adi != null)
+                .Select(m => new { m.Id, m.Adi, m.Soyadi })
+                .ToListAsync();
+
+            foreach (var m in musteriler)
+            {
+                var fullName = ((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim().ToUpperInvariant();
+                var firstName = (m.Adi ?? "").Trim().ToUpperInvariant();
+                if (!string.IsNullOrEmpty(fullName) && !session.CachedCustomerLookup.ContainsKey(fullName))
+                    session.CachedCustomerLookup[fullName] = m.Id;
+                if (!string.IsNullOrEmpty(firstName) && !session.CachedCustomerLookup.ContainsKey(firstName))
+                    session.CachedCustomerLookup[firstName] = m.Id;
+            }
+        }
+
+        var existingPolicyKeys = session.CachedPolicyKeys;
+        var customerLookup = session.CachedCustomerLookup;
+        // ===== LOOKUP SONU =====
+
+        // Entity'leri hazırla
         foreach (var row in batchRows)
         {
             try
@@ -438,7 +561,6 @@ public class ExcelImportService : IExcelImportService
                 if (existingPolicyKeys.Contains(policyKey))
                 {
                     duplicateCount++;
-                    // NOT: Mükerrerler errors listesine EKLENMİYOR - ayrı sayılıyor
                     continue;
                 }
 
@@ -501,13 +623,32 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        // Batch'i kaydet
-        await _context.SaveChangesAsync();
+        // SaveChangesAsync zaten implicit transaction kullanır (tek SaveChanges = atomik)
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            var innerMsg = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Batch kaydetme hatası. Detay: {Detail}", innerMsg);
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = $"Veritabanına kaydetme hatası: {innerMsg}"
+            };
+        }
 
-        // Son batch ise session'ı temizle
+        // Son batch ise session ve temp dosyayı temizle, değilse timeout'u uzat
         if (!hasMoreBatches)
         {
+            DeleteTempFile(session.TempFilePath);
             _cache.Remove(sessionId);
+        }
+        else
+        {
+            // Devam eden batch'ler için session süresini uzat
+            _cache.Set(sessionId, session, CreateCacheOptions());
         }
 
         _logger.LogInformation(
@@ -762,7 +903,7 @@ public class ExcelImportService : IExcelImportService
                 {
                     LeaveOpen = true
                 });
-                var result = reader.AsDataSet(new ExcelDataSetConfiguration
+                using var result = reader.AsDataSet(new ExcelDataSetConfiguration
                 {
                     ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
                 });
@@ -874,19 +1015,23 @@ public class ExcelImportService : IExcelImportService
                 // Müşteri ve branş eşleştirmelerini yap
                 await EnrichRowsWithLookupDataAsync(parsedRows);
 
-                // Session oluştur
+                // Session oluştur - satırları temp dosyaya yaz (bellek tasarrufu)
                 var sessionId = Guid.NewGuid().ToString();
+                var tempFilePath = SaveRowsToTempFile(parsedRows);
                 var cacheEntry = new ImportSessionData
                 {
                     SessionId = sessionId,
+                    UserId = _currentUserService.UserId ?? string.Empty,
                     FileName = fileName,
                     SigortaSirketiId = sigortaSirketiId ?? detectedSirketId,
-                    Rows = parsedRows,
+                    TempFilePath = tempFilePath,
+                    TotalRowCount = parsedRows.Count,
+                    ValidRowCount = parsedRows.Count(r => r.IsValid),
                     CreatedAt = _dateTimeService.Now
                 };
 
-                // Cache'e kaydet (30 dakika geçerli)
-                _cache.Set(sessionId, cacheEntry, TimeSpan.FromMinutes(30));
+                // Cache'e kaydet (30 dakika, PostEviction ile temp dosya temizlenir)
+                _cache.Set(sessionId, cacheEntry, CreateCacheOptions());
 
                 // Sigorta şirketi adını al
                 var sirket = await _context.SigortaSirketleri
@@ -936,7 +1081,13 @@ public class ExcelImportService : IExcelImportService
         try
         {
             var position = xmlStream.Position;
-            var doc = XDocument.Load(xmlStream);
+            var xmlSettings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+            using var xmlReader = XmlReader.Create(xmlStream, xmlSettings);
+            var doc = XDocument.Load(xmlReader);
             xmlStream.Position = position;
 
             var root = doc.Root;
@@ -1039,7 +1190,7 @@ public class ExcelImportService : IExcelImportService
             {
                 LeaveOpen = true
             });
-            var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
+            using var dataSet = reader.AsDataSet(new ExcelDataSetConfiguration
             {
                 ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
             });
@@ -1167,7 +1318,7 @@ public class ExcelImportService : IExcelImportService
             {
                 LeaveOpen = true
             });
-            var result = reader.AsDataSet(new ExcelDataSetConfiguration
+            using var result = reader.AsDataSet(new ExcelDataSetConfiguration
             {
                 ConfigureDataTable = _ => new ExcelDataTableConfiguration { UseHeaderRow = false }
             });
@@ -1403,8 +1554,101 @@ public class ExcelImportService : IExcelImportService
         }
     }
 
-    // FindOrCreateMusteriAsync kaldırıldı - TC/VKN olmadan müşteri oluşturma devre dışı
-    // İleride SigortaliAdi ile müşteri eşleştirme/oluşturma eklenebilir
+    // ---------------------------------------------------------------
+    // Temp dosya yönetimi
+    // ---------------------------------------------------------------
+
+    private string SaveRowsToTempFile(List<ExcelImportRowDto> rows)
+    {
+        Directory.CreateDirectory(TempDirectory);
+        var filePath = Path.Combine(TempDirectory, $"{Guid.NewGuid()}.json");
+        var json = JsonSerializer.Serialize(rows);
+        File.WriteAllText(filePath, json, Encoding.UTF8);
+        _logger.LogInformation("Temp dosya yazıldı: {Path}, {Count} satır", filePath, rows.Count);
+        return filePath;
+    }
+
+    /// <summary>
+    /// Session'dan satırları al: önce CachedRows, yoksa temp dosyadan oku ve cache'le
+    /// </summary>
+    private List<ExcelImportRowDto> GetSessionRows(ImportSessionData session)
+    {
+        if (session.CachedRows != null)
+            return session.CachedRows;
+
+        var rows = ReadRowsFromTempFile(session.TempFilePath);
+        session.CachedRows = rows; // Sonraki batch'ler için hafızada tut
+        return rows;
+    }
+
+    private List<ExcelImportRowDto> ReadRowsFromTempFile(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            _logger.LogWarning("Temp dosya bulunamadı: {Path}", filePath);
+            return new List<ExcelImportRowDto>();
+        }
+
+        var json = File.ReadAllText(filePath, Encoding.UTF8);
+        return JsonSerializer.Deserialize<List<ExcelImportRowDto>>(json) ?? new List<ExcelImportRowDto>();
+    }
+
+    private void DeleteTempFile(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+        try
+        {
+            File.Delete(filePath);
+            _logger.LogInformation("Temp dosya silindi: {Path}", filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Temp dosya silinemedi: {Path}", filePath);
+        }
+    }
+
+    private MemoryCacheEntryOptions CreateCacheOptions()
+    {
+        return new MemoryCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromMinutes(30))
+            .RegisterPostEvictionCallback((key, value, reason, state) =>
+            {
+                // Sadece timeout veya explicit Remove durumunda temp dosyayı sil
+                // Replaced (batch timeout uzatma) sırasında SİLME - dosya hala lazım!
+                if (reason == Microsoft.Extensions.Caching.Memory.EvictionReason.Replaced)
+                    return;
+
+                if (value is ImportSessionData session && !string.IsNullOrEmpty(session.TempFilePath))
+                {
+                    try
+                    {
+                        if (File.Exists(session.TempFilePath))
+                            File.Delete(session.TempFilePath);
+                    }
+                    catch { /* best effort */ }
+                }
+            });
+    }
+
+    private static void CleanupOldTempFiles()
+    {
+        try
+        {
+            if (!Directory.Exists(TempDirectory)) return;
+
+            foreach (var file in Directory.GetFiles(TempDirectory, "*.json"))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.LastWriteTimeUtc < DateTime.UtcNow.AddHours(-1))
+                        fileInfo.Delete();
+                }
+                catch { /* best effort */ }
+            }
+        }
+        catch { /* startup cleanup failure is not critical */ }
+    }
 
     private static int GetZeyilNoAsInt(string? value)
     {
@@ -1428,8 +1672,16 @@ public class ExcelImportService : IExcelImportService
 internal class ImportSessionData
 {
     public string SessionId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
     public int SigortaSirketiId { get; set; }
-    public List<ExcelImportRowDto> Rows { get; set; } = new();
+    public string TempFilePath { get; set; } = string.Empty;
+    public int TotalRowCount { get; set; }
+    public int ValidRowCount { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    // Batch işlemi sırasında lazy-load (ilk batch'te doldurulur, sonrakiler yeniden kullanır)
+    public List<ExcelImportRowDto>? CachedRows { get; set; }
+    public HashSet<string>? CachedPolicyKeys { get; set; }
+    public Dictionary<string, int>? CachedCustomerLookup { get; set; }
 }

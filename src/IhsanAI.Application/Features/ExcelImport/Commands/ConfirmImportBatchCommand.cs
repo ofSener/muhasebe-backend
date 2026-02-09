@@ -26,12 +26,21 @@ public class ConfirmImportBatchCommandHandler : IRequestHandler<ConfirmImportBat
             };
         }
 
-        if (request.Take <= 0)
+        if (request.Skip < 0)
         {
             return new ExcelImportResultDto
             {
                 Success = false,
-                ErrorMessage = "Take değeri 0'dan büyük olmalı."
+                ErrorMessage = "Skip değeri negatif olamaz."
+            };
+        }
+
+        if (request.Take <= 0 || request.Take > 500)
+        {
+            return new ExcelImportResultDto
+            {
+                Success = false,
+                ErrorMessage = "Take değeri 1 ile 500 arasında olmalı."
             };
         }
 

@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using IhsanAI.Domain.Entities;
 
 namespace IhsanAI.Application.Common.Interfaces;
 
 public interface IApplicationDbContext
 {
+    DatabaseFacade Database { get; }
     DbSet<YakalananPolice> YakalananPoliceler { get; }
     DbSet<YetkiAdi> YetkiAdlari { get; }
     DbSet<Yetki> Yetkiler { get; }
