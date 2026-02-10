@@ -38,6 +38,14 @@ public static class KullanicilarEndpoints
         .WithName("GetKullaniciById")
         .WithDescription("ID'ye göre kullanıcı getirir");
 
+        group.MapGet("/{id:int}/details", async (int id, DateTime? startDate, DateTime? endDate, int? bransId, int? sirketId, string? search, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetKullaniciDetailsQuery(id, startDate, endDate, bransId, sirketId, search));
+            return result is not null ? Results.Ok(result) : Results.NotFound();
+        })
+        .WithName("GetKullaniciDetails")
+        .WithDescription("Kullanıcının detay bilgilerini, istatistiklerini ve poliçelerini getirir");
+
         group.MapGet("/search", async (string name, int? firmaId, int? limit, IMediator mediator) =>
         {
             var result = await mediator.Send(new SearchProducersQuery(name, firmaId, limit ?? 20));
