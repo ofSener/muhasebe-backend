@@ -16,6 +16,7 @@ public record KullaniciInfoDto
     public string? Email { get; init; }
     public string? GsmNo { get; init; }
     public string? ProfilYolu { get; init; }
+    public bool Silinmis { get; init; }
 }
 
 public record KullaniciStatsDto
@@ -99,7 +100,7 @@ public class GetKullaniciDetailsQueryHandler : IRequestHandler<GetKullaniciDetai
 
     public async Task<KullaniciDetailsResponse?> Handle(GetKullaniciDetailsQuery request, CancellationToken cancellationToken)
     {
-        // 1. Kullanıcı bilgisi
+        // 1. Kullanıcı bilgisi (aktif tabloda ara, yoksa eski tablodan)
         var kullaniciInfo = await (
             from k in _context.Kullanicilar.Where(x => x.Id == request.KullaniciId)
             join s in _context.Subeler on k.SubeId equals s.Id into subeler
@@ -113,10 +114,34 @@ public class GetKullaniciDetailsQueryHandler : IRequestHandler<GetKullaniciDetai
                 KayitTarihi = k.KayitTarihi,
                 Email = k.Email,
                 GsmNo = k.GsmNo,
-                ProfilYolu = k.ProfilYolu
+                ProfilYolu = k.ProfilYolu,
+                Silinmis = false
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken);
+
+        // Aktif tabloda yoksa eski tablodan ara
+        if (kullaniciInfo == null)
+        {
+            kullaniciInfo = await (
+                from k in _context.KullanicilarEski.Where(x => x.Id == request.KullaniciId)
+                join s in _context.Subeler on k.SubeId equals s.Id into subeler
+                from sube in subeler.DefaultIfEmpty()
+                select new KullaniciInfoDto
+                {
+                    Id = k.Id,
+                    Adi = k.Adi ?? "",
+                    Soyadi = k.Soyadi ?? "",
+                    SubeAdi = sube != null ? sube.SubeAdi ?? "" : "",
+                    KayitTarihi = k.KayitTarihi,
+                    Email = k.Email,
+                    GsmNo = k.GsmNo,
+                    ProfilYolu = k.ProfilYolu,
+                    Silinmis = true
+                })
+                .AsNoTracking()
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         if (kullaniciInfo == null)
             return null;
