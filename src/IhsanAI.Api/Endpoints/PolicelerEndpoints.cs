@@ -91,6 +91,50 @@ public static class PolicelerEndpoints
         .WithName("BatchApprovePolicies")
         .WithDescription("Toplu poliçe onaylama");
 
+        // --- Müşteri Eşleştirme Endpoints ---
+
+        group.MapGet("/unmatched", async (
+            int? page,
+            int? pageSize,
+            DateTime? startDate,
+            DateTime? endDate,
+            int? sigortaSirketiId,
+            string? search,
+            IMediator mediator) =>
+        {
+            var query = new GetUnmatchedPoliciesQuery
+            {
+                Page = page ?? 1,
+                PageSize = pageSize ?? 20,
+                StartDate = startDate,
+                EndDate = endDate,
+                SigortaSirketiId = sigortaSirketiId,
+                Search = search
+            };
+
+            var result = await mediator.Send(query);
+            return Results.Ok(result);
+        })
+        .WithName("GetUnmatchedPolicies")
+        .WithDescription("Müşterisi eşleşmemiş poliçeleri listeler");
+
+        group.MapPost("/{id:int}/assign-tc", async (int id, AssignTcToPolicyCommand command, IMediator mediator) =>
+        {
+            var cmdWithId = command with { PolicyId = id };
+            var result = await mediator.Send(cmdWithId);
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("AssignTcToPolicy")
+        .WithDescription("Poliçeye TC/VKN atar ve müşteri eşleştirmesi yapar");
+
+        group.MapPost("/batch-assign-tc", async (BatchAssignTcCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return Results.Ok(result);
+        })
+        .WithName("BatchAssignTc")
+        .WithDescription("Toplu TC/VKN ataması");
+
         group.MapGet("/renewals", async (
             int? page,
             int? pageSize,

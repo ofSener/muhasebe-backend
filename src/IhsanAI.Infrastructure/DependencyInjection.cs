@@ -38,7 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleDriveService, GoogleDriveService>();
         services.AddScoped<IExcelImportService, ExcelImportService>();
         services.AddScoped<IAcentelikService, AcentelikService>();
-
+        services.AddScoped<ICustomerMatchingService, CustomerMatchingService>();
         // Memory Cache (Excel import session için)
         services.AddMemoryCache();
 

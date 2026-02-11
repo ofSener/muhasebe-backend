@@ -24,6 +24,7 @@ public class ExcelImportService : IExcelImportService
     private readonly IDateTimeService _dateTimeService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<ExcelImportService> _logger;
+    private readonly ICustomerMatchingService _customerMatchingService;
     private readonly List<IExcelParser> _parsers;
     private readonly QuickXmlParser _quickXmlParser;
     private readonly UnicoXmlParser _unicoXmlParser;
@@ -39,13 +40,15 @@ public class ExcelImportService : IExcelImportService
         ICurrentUserService currentUserService,
         IDateTimeService dateTimeService,
         IMemoryCache cache,
-        ILogger<ExcelImportService> logger)
+        ILogger<ExcelImportService> logger,
+        ICustomerMatchingService customerMatchingService)
     {
         _context = context;
         _currentUserService = currentUserService;
         _dateTimeService = dateTimeService;
         _cache = cache;
         _logger = logger;
+        _customerMatchingService = customerMatchingService;
 
         // Parser'ları kaydet - SIRA ÖNEMLİ: Spesifik signature'lar önce, genel olanlar sona
         // Bidirectional Contains matching yüzünden genel kolonlar ("Ürün No", "Sigortalı Ünvanı" vb.)
@@ -300,31 +303,24 @@ public class ExcelImportService : IExcelImportService
             .Select(p => $"{p.PoliceNo}_{p.ZeyilNo}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Müşteri lookup: isim ile toplu sorgula
-        var customerNames = validRows
-            .Where(r => !r.MusteriId.HasValue && !string.IsNullOrEmpty(r.SigortaliAdi))
-            .Select(r => r.SigortaliAdi!.Trim().ToUpperInvariant())
-            .Distinct()
+        // Müşteri eşleştirme: Çoklu sinyal (TC > VKN > Plaka > İsim)
+        var firmaId = _currentUserService.FirmaId ?? 0;
+        var matchRequests = validRows
+            .Where(r => !r.MusteriId.HasValue)
+            .Select((r, i) => new CustomerMatchRequest
+            {
+                RowIndex = r.RowNumber,
+                TcKimlikNo = r.Tckn,
+                VergiNo = r.Vkn,
+                SigortaliAdi = r.SigortaliAdi,
+                Plaka = r.Plaka,
+                FirmaId = firmaId
+            })
             .ToList();
 
-        var customerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        if (customerNames.Count > 0)
-        {
-            var musteriler = await _context.Musteriler
-                .Where(m => m.Adi != null)
-                .Select(m => new { m.Id, m.Adi, m.Soyadi })
-                .ToListAsync();
-
-            foreach (var m in musteriler)
-            {
-                var fullName = ((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim().ToUpperInvariant();
-                var firstName = (m.Adi ?? "").Trim().ToUpperInvariant();
-                if (!string.IsNullOrEmpty(fullName) && !customerLookup.ContainsKey(fullName))
-                    customerLookup[fullName] = m.Id;
-                if (!string.IsNullOrEmpty(firstName) && !customerLookup.ContainsKey(firstName))
-                    customerLookup[firstName] = m.Id;
-            }
-        }
+        var matchResults = matchRequests.Count > 0
+            ? await _customerMatchingService.BatchMatchAsync(matchRequests, firmaId)
+            : new Dictionary<int, CustomerMatchResult>();
 
         // Entity'leri hazırla
         foreach (var row in validRows)
@@ -340,15 +336,12 @@ public class ExcelImportService : IExcelImportService
                 }
                 existingPolicyKeys.Add(policyKey);
 
-                // Müşteri kontrolü (memory'den)
+                // Müşteri eşleştirme sonuçlarından al
                 var musteriId = row.MusteriId;
-                if (!musteriId.HasValue && !string.IsNullOrEmpty(row.SigortaliAdi))
+                if (!musteriId.HasValue && matchResults.TryGetValue(row.RowNumber, out var matchResult))
                 {
-                    var sigortaliAdi = row.SigortaliAdi.Trim().ToUpperInvariant();
-                    if (customerLookup.TryGetValue(sigortaliAdi, out var foundMusteriId))
-                    {
-                        musteriId = foundMusteriId;
-                    }
+                    musteriId = matchResult.MusteriId;
+                    if (matchResult.AutoCreated) newCustomersCreated++;
                 }
 
                 // PoliceHavuz kaydı oluştur
@@ -368,8 +361,10 @@ public class ExcelImportService : IExcelImportService
                     Vergi = 0,
                     Komisyon = row.Komisyon ?? 0,
                     BransId = row.BransId ?? 0,
-                    MusteriId = musteriId ?? 0,
-                    SigortaEttirenId = musteriId ?? 0,
+                    MusteriId = musteriId,
+                    SigortaEttirenId = musteriId,
+                    TcKimlikNo = row.Tckn,
+                    VergiNo = row.Vkn,
                     IsOrtagiFirmaId = _currentUserService.FirmaId ?? 0,
                     IsOrtagiSubeId = _currentUserService.SubeId ?? 0,
                     IsOrtagiUyeId = 0,
@@ -527,28 +522,26 @@ public class ExcelImportService : IExcelImportService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
 
-        if (session.CachedCustomerLookup == null)
-        {
-            session.CachedCustomerLookup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-            var musteriler = await _context.Musteriler
-                .Where(m => m.Adi != null)
-                .Select(m => new { m.Id, m.Adi, m.Soyadi })
-                .ToListAsync();
-
-            foreach (var m in musteriler)
+        // Müşteri eşleştirme: Çoklu sinyal (TC > VKN > Plaka > İsim)
+        var batchFirmaId = _currentUserService.FirmaId ?? 0;
+        var batchMatchRequests = batchRows
+            .Where(r => !r.MusteriId.HasValue)
+            .Select(r => new CustomerMatchRequest
             {
-                var fullName = ((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim().ToUpperInvariant();
-                var firstName = (m.Adi ?? "").Trim().ToUpperInvariant();
-                if (!string.IsNullOrEmpty(fullName) && !session.CachedCustomerLookup.ContainsKey(fullName))
-                    session.CachedCustomerLookup[fullName] = m.Id;
-                if (!string.IsNullOrEmpty(firstName) && !session.CachedCustomerLookup.ContainsKey(firstName))
-                    session.CachedCustomerLookup[firstName] = m.Id;
-            }
-        }
+                RowIndex = r.RowNumber,
+                TcKimlikNo = r.Tckn,
+                VergiNo = r.Vkn,
+                SigortaliAdi = r.SigortaliAdi,
+                Plaka = r.Plaka,
+                FirmaId = batchFirmaId
+            })
+            .ToList();
+
+        var batchMatchResults = batchMatchRequests.Count > 0
+            ? await _customerMatchingService.BatchMatchAsync(batchMatchRequests, batchFirmaId)
+            : new Dictionary<int, CustomerMatchResult>();
 
         var existingPolicyKeys = session.CachedPolicyKeys;
-        var customerLookup = session.CachedCustomerLookup;
         // ===== LOOKUP SONU =====
 
         // Entity'leri hazırla
@@ -567,15 +560,11 @@ public class ExcelImportService : IExcelImportService
                 // Yeni eklenen poliçeyi de set'e ekle (aynı batch içinde duplicate önleme)
                 existingPolicyKeys.Add(policyKey);
 
-                // Müşteri kontrolü (memory'den)
+                // Müşteri eşleştirme sonuçlarından al
                 var musteriId = row.MusteriId;
-                if (!musteriId.HasValue && !string.IsNullOrEmpty(row.SigortaliAdi))
+                if (!musteriId.HasValue && batchMatchResults.TryGetValue(row.RowNumber, out var batchMatchResult))
                 {
-                    var sigortaliAdi = row.SigortaliAdi.Trim().ToUpperInvariant();
-                    if (customerLookup.TryGetValue(sigortaliAdi, out var foundMusteriId))
-                    {
-                        musteriId = foundMusteriId;
-                    }
+                    musteriId = batchMatchResult.MusteriId;
                 }
 
                 // PoliceHavuz kaydı oluştur
@@ -595,8 +584,10 @@ public class ExcelImportService : IExcelImportService
                     Vergi = 0,
                     Komisyon = row.Komisyon ?? 0,
                     BransId = row.BransId ?? 0,
-                    MusteriId = musteriId ?? 0,
-                    SigortaEttirenId = musteriId ?? 0,
+                    MusteriId = musteriId,
+                    SigortaEttirenId = musteriId,
+                    TcKimlikNo = row.Tckn,
+                    VergiNo = row.Vkn,
                     IsOrtagiFirmaId = _currentUserService.FirmaId ?? 0,
                     IsOrtagiSubeId = _currentUserService.SubeId ?? 0,
                     IsOrtagiUyeId = 0,

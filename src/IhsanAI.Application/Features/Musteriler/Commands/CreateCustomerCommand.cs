@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using IhsanAI.Application.Common.Interfaces;
 using IhsanAI.Domain.Entities;
 
@@ -51,6 +52,38 @@ public class CreateCustomerCommandHandler : IRequestHandler<CreateCustomerComman
 
     public async Task<CreateCustomerResultDto> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
     {
+        // TC Kimlik No benzersizlik kontrolü (firma bazında)
+        if (!string.IsNullOrWhiteSpace(request.TcKimlikNo))
+        {
+            var tcExists = await _context.Musteriler.AnyAsync(m =>
+                m.TcKimlikNo == request.TcKimlikNo &&
+                m.EkleyenFirmaId == _currentUserService.FirmaId, cancellationToken);
+            if (tcExists)
+            {
+                return new CreateCustomerResultDto
+                {
+                    Success = false,
+                    ErrorMessage = "Bu TC Kimlik No ile kayıtlı müşteri zaten mevcut."
+                };
+            }
+        }
+
+        // Vergi No benzersizlik kontrolü (firma bazında)
+        if (!string.IsNullOrWhiteSpace(request.VergiNo))
+        {
+            var vknExists = await _context.Musteriler.AnyAsync(m =>
+                m.VergiNo == request.VergiNo &&
+                m.EkleyenFirmaId == _currentUserService.FirmaId, cancellationToken);
+            if (vknExists)
+            {
+                return new CreateCustomerResultDto
+                {
+                    Success = false,
+                    ErrorMessage = "Bu Vergi No ile kayıtlı müşteri zaten mevcut."
+                };
+            }
+        }
+
         var musteri = new Musteri
         {
             SahipTuru = request.SahipTuru,

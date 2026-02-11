@@ -73,6 +73,40 @@ public class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustomerComman
             throw new ForbiddenAccessException("Bu müşteriyi güncelleme yetkiniz yok.");
         }
 
+        // TC Kimlik No benzersizlik kontrolü (firma bazında, kendi kaydı hariç)
+        if (request.TcKimlikNo != null && request.TcKimlikNo != musteri.TcKimlikNo && !string.IsNullOrWhiteSpace(request.TcKimlikNo))
+        {
+            var tcExists = await _context.Musteriler.AnyAsync(m =>
+                m.TcKimlikNo == request.TcKimlikNo &&
+                m.EkleyenFirmaId == musteri.EkleyenFirmaId &&
+                m.Id != musteri.Id, cancellationToken);
+            if (tcExists)
+            {
+                return new UpdateCustomerResultDto
+                {
+                    Success = false,
+                    ErrorMessage = "Bu TC Kimlik No ile kayıtlı başka bir müşteri zaten mevcut."
+                };
+            }
+        }
+
+        // Vergi No benzersizlik kontrolü (firma bazında, kendi kaydı hariç)
+        if (request.VergiNo != null && request.VergiNo != musteri.VergiNo && !string.IsNullOrWhiteSpace(request.VergiNo))
+        {
+            var vknExists = await _context.Musteriler.AnyAsync(m =>
+                m.VergiNo == request.VergiNo &&
+                m.EkleyenFirmaId == musteri.EkleyenFirmaId &&
+                m.Id != musteri.Id, cancellationToken);
+            if (vknExists)
+            {
+                return new UpdateCustomerResultDto
+                {
+                    Success = false,
+                    ErrorMessage = "Bu Vergi No ile kayıtlı başka bir müşteri zaten mevcut."
+                };
+            }
+        }
+
         // Update fields if provided
         if (request.SahipTuru.HasValue)
             musteri.SahipTuru = request.SahipTuru.Value;

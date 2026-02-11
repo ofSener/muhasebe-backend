@@ -74,6 +74,38 @@ public static class MusterilerEndpoints
         .WithName("DeleteCustomer")
         .WithDescription("Müşteriyi siler");
 
+        // --- Müşteri Eşleştirme & Birleştirme Endpoints ---
+
+        group.MapGet("/candidates", async (
+            string? tc,
+            string? vkn,
+            string? name,
+            string? plaka,
+            int? limit,
+            IMediator mediator) =>
+        {
+            var result = await mediator.Send(new FindCustomerCandidatesQuery
+            {
+                TcKimlikNo = tc,
+                VergiNo = vkn,
+                Name = name,
+                Plaka = plaka,
+                Limit = limit
+            });
+            return Results.Ok(result);
+        })
+        .WithName("FindCustomerCandidates")
+        .WithDescription("Müşteri eşleştirme adaylarını arar")
+        .RequireAuthorization("CanViewCustomers");
+
+        group.MapPost("/merge", async (MergeCustomersCommand command, IMediator mediator) =>
+        {
+            var result = await mediator.Send(command);
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("MergeCustomers")
+        .WithDescription("İki müşteri kaydını birleştirir");
+
         return app;
     }
 }

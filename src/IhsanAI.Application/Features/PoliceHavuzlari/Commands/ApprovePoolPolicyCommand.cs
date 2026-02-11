@@ -21,13 +21,16 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ICustomerMatchingService _customerMatchingService;
 
     public ApprovePoolPolicyCommandHandler(
         IApplicationDbContext context,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ICustomerMatchingService customerMatchingService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _customerMatchingService = customerMatchingService;
     }
 
     public async Task<ApprovePoolPolicyResult> Handle(ApprovePoolPolicyCommand request, CancellationToken cancellationToken)
@@ -80,6 +83,24 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             };
         }
 
+        // MusteriId yoksa, mevcut sinyallerle eşleştirme yap
+        var musteriId = poolPolicy.MusteriId;
+        if (!musteriId.HasValue)
+        {
+            var firmaId = yakalananPolice?.FirmaId ?? poolPolicy.IsOrtagiFirmaId;
+            var matchResult = await _customerMatchingService.FindBestMatchAsync(new CustomerMatchRequest
+            {
+                TcKimlikNo = poolPolicy.TcKimlikNo,
+                VergiNo = poolPolicy.VergiNo,
+                SigortaliAdi = yakalananPolice?.SigortaliAdi,
+                Plaka = yakalananPolice?.Plaka ?? poolPolicy.Plaka,
+                FirmaId = firmaId
+            }, cancellationToken);
+
+            if (matchResult.MusteriId.HasValue)
+                musteriId = matchResult.MusteriId;
+        }
+
         // Yeni poliçe oluştur
         var newPolicy = new Police
         {
@@ -92,7 +113,9 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             BitisTarihi = poolPolicy.BitisTarihi,
             BrutPrim = (float)poolPolicy.BrutPrim,
             NetPrim = (float)poolPolicy.NetPrim,
-            SigortaliAdi = null, // Müşteri bilgisi ayrı tabloda
+            SigortaliAdi = yakalananPolice?.SigortaliAdi,
+            TcKimlikNo = poolPolicy.TcKimlikNo,
+            VergiNo = poolPolicy.VergiNo,
 
             // Yakalanan poliçedeki bilgiler (öncelikle yakalanan poliçeden, yoksa IsOrtagi kolonlarından)
             ProduktorId = yakalananPolice?.ProduktorId ?? poolPolicy.IsOrtagiUyeId,
@@ -101,7 +124,7 @@ public class ApprovePoolPolicyCommandHandler : IRequestHandler<ApprovePoolPolicy
             SubeId = yakalananPolice?.SubeId ?? poolPolicy.IsOrtagiSubeId,
             FirmaId = yakalananPolice?.FirmaId ?? poolPolicy.IsOrtagiFirmaId,
 
-            MusteriId = poolPolicy.MusteriId,
+            MusteriId = musteriId,
             CepTelefonu = null,
             GuncelleyenUyeId = _currentUserService.UyeId,
             DisPolice = poolPolicy.DisPolice,

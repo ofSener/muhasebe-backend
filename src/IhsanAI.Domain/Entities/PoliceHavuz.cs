@@ -41,7 +41,7 @@ public class PoliceHavuz
     public DateTime BitisTarihi { get; set; }
 
     [Column("SigortaEttirenId")]
-    public int SigortaEttirenId { get; set; }
+    public int? SigortaEttirenId { get; set; }
 
     [Column("BrutPrim")]
     public decimal BrutPrim { get; set; }
@@ -62,7 +62,15 @@ public class PoliceHavuz
     public sbyte DisPolice { get; set; }
 
     [Column("MusteriID")]
-    public int MusteriId { get; set; }
+    public int? MusteriId { get; set; }
+
+    [Column("TcKimlikNo")]
+    [MaxLength(11)]
+    public string? TcKimlikNo { get; set; }
+
+    [Column("VergiNo")]
+    [MaxLength(10)]
+    public string? VergiNo { get; set; }
 
     [Column("PoliceTespitKaynakId")]
     public int PoliceTespitKaynakId { get; set; }

@@ -61,6 +61,14 @@ public class Police
     [Column("MusteriID")]
     public int? MusteriId { get; set; }
 
+    [Column("TcKimlikNo")]
+    [MaxLength(11)]
+    public string? TcKimlikNo { get; set; }
+
+    [Column("VergiNo")]
+    [MaxLength(10)]
+    public string? VergiNo { get; set; }
+
     [Column("CepTelefonu")]
     public int? CepTelefonu { get; set; }
 
