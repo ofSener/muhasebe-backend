@@ -87,11 +87,11 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
 
         if (startDate.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.EklenmeTarihi >= startDate.Value);
+            policeQuery = policeQuery.Where(p => p.TanzimTarihi >= startDate.Value);
         }
         if (endDate.HasValue)
         {
-            policeQuery = policeQuery.Where(p => p.EklenmeTarihi <= endDate.Value);
+            policeQuery = policeQuery.Where(p => p.TanzimTarihi <= endDate.Value);
         }
 
         // Apply filters
@@ -103,7 +103,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
             policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
         var policeler = await policeQuery
-            .OrderByDescending(p => p.EklenmeTarihi)
+            .OrderByDescending(p => p.TanzimTarihi)
             .Take(limit)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -165,7 +165,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
                 BransAdi = brans?.Ad ?? $"Branş #{p.PoliceTuruId}",
                 BrutPrim = (decimal)p.BrutPrim,
                 Komisyon = (decimal)(p.Komisyon ?? 0),
-                EklenmeTarihi = p.EklenmeTarihi,
+                EklenmeTarihi = p.TanzimTarihi,
                 EkleyenKullanici = kullanici != null ? $"{kullanici.Adi} {kullanici.Soyadi}".Trim() : ""
             };
         }).ToList();
@@ -195,11 +195,11 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
 
         if (startDate.HasValue)
         {
-            yakalamaQuery = yakalamaQuery.Where(y => y.EklenmeTarihi >= startDate.Value);
+            yakalamaQuery = yakalamaQuery.Where(y => y.TanzimTarihi >= startDate.Value);
         }
         if (endDate.HasValue)
         {
-            yakalamaQuery = yakalamaQuery.Where(y => y.EklenmeTarihi <= endDate.Value);
+            yakalamaQuery = yakalamaQuery.Where(y => y.TanzimTarihi <= endDate.Value);
         }
 
         // Apply filters
@@ -213,7 +213,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
             yakalamaQuery = yakalamaQuery.Where(y => filters.KullaniciIds.Contains(y.ProduktorId));
 
         var yakalananlar = await yakalamaQuery
-            .OrderByDescending(y => y.EklenmeTarihi)
+            .OrderByDescending(y => y.TanzimTarihi)
             .Take(limit)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
@@ -267,7 +267,7 @@ public class GetSonAktivitelerQueryHandler : IRequestHandler<GetSonAktivitelerQu
                 BransAdi = policeTuru?.Turu ?? $"Tür #{y.PoliceTuru}",
                 BrutPrim = (decimal)y.BrutPrim,
                 Komisyon = 0, // Yakalanan poliçelerde komisyon yok
-                EklenmeTarihi = y.EklenmeTarihi,
+                EklenmeTarihi = y.TanzimTarihi,
                 EkleyenKullanici = kullanici != null ? $"{kullanici.Adi} {kullanici.Soyadi}".Trim() : ""
             };
         }).ToList();

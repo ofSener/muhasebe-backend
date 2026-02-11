@@ -16,6 +16,7 @@ public record TopPerformerItem
     public decimal ToplamBrutPrim { get; init; }
     public decimal ToplamKomisyon { get; init; }
     public decimal KazancOrani { get; init; } // Komisyon / BrutPrim yüzdesi
+    public bool Aktif { get; init; } = true;
 }
 
 public record TopPerformersResponse
@@ -99,13 +100,26 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Kullanıcı bilgilerini getir
+        // Kullanıcı bilgilerini getir (aktif + pasif)
         var uyeIds = policeler.Select(p => p.UyeId).Distinct().ToList();
         var kullanicilar = await _context.Kullanicilar
             .Where(k => uyeIds.Contains(k.Id))
-            .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId })
+            .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId, k.Onay, Eski = false })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        // Aktif tabloda bulunamayan kullanıcıları eski tablodan ara
+        var bulunanIds = kullanicilar.Select(k => k.Id).ToHashSet();
+        var eksikIds = uyeIds.Where(id => !bulunanIds.Contains(id)).ToList();
+        if (eksikIds.Count > 0)
+        {
+            var eskiKullanicilar = await _context.KullanicilarEski
+                .Where(k => eksikIds.Contains(k.Id))
+                .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId, k.Onay, Eski = true })
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+            kullanicilar = kullanicilar.Concat(eskiKullanicilar).ToList();
+        }
 
         // Şube bilgilerini getir
         var subeIds = kullanicilar.Where(k => k.SubeId.HasValue).Select(k => k.SubeId!.Value).Distinct().ToList();
@@ -136,7 +150,8 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
                     PoliceSayisi = g.Count(),
                     ToplamBrutPrim = toplamBrutPrim,
                     ToplamKomisyon = toplamKomisyon,
-                    KazancOrani = toplamBrutPrim > 0 ? Math.Round(toplamKomisyon / toplamBrutPrim * 100, 2) : 0
+                    KazancOrani = toplamBrutPrim > 0 ? Math.Round(toplamKomisyon / toplamBrutPrim * 100, 2) : 0,
+                    Aktif = kullanici != null ? kullanici.Onay == 1 && !kullanici.Eski : false
                 };
             })
             .OrderByDescending(x => x.ToplamBrutPrim)
@@ -183,13 +198,26 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Kullanıcı bilgilerini getir (UyeId kullanılıyor)
+        // Kullanıcı bilgilerini getir (aktif + pasif)
         var uyeIds = yakalananlar.Select(y => y.UyeId).Distinct().ToList();
         var kullanicilar = await _context.Kullanicilar
             .Where(k => uyeIds.Contains(k.Id))
-            .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId })
+            .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId, k.Onay, Eski = false })
             .AsNoTracking()
             .ToListAsync(cancellationToken);
+
+        // Aktif tabloda bulunamayan kullanıcıları eski tablodan ara
+        var bulunanIds = kullanicilar.Select(k => k.Id).ToHashSet();
+        var eksikIds = uyeIds.Where(id => !bulunanIds.Contains(id)).ToList();
+        if (eksikIds.Count > 0)
+        {
+            var eskiKullanicilar = await _context.KullanicilarEski
+                .Where(k => eksikIds.Contains(k.Id))
+                .Select(k => new { k.Id, k.Adi, k.Soyadi, k.SubeId, k.Onay, Eski = true })
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+            kullanicilar = kullanicilar.Concat(eskiKullanicilar).ToList();
+        }
 
         // Şube bilgilerini getir
         var subeIds = kullanicilar.Where(k => k.SubeId.HasValue).Select(k => k.SubeId!.Value).Distinct().ToList();
@@ -218,8 +246,9 @@ public class GetTopPerformersQueryHandler : IRequestHandler<GetTopPerformersQuer
                     SubeAdi = sube?.SubeAdi,
                     PoliceSayisi = g.Count(),
                     ToplamBrutPrim = toplamBrutPrim,
-                    ToplamKomisyon = 0, // Yakalanan poliçelerde komisyon yok
-                    KazancOrani = 0
+                    ToplamKomisyon = 0,
+                    KazancOrani = 0,
+                    Aktif = kullanici != null ? kullanici.Onay == 1 && !kullanici.Eski : false
                 };
             })
             .OrderByDescending(x => x.ToplamBrutPrim)
