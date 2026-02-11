@@ -102,8 +102,8 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Toplam poliçe sayısı (tüm zamanlar)
-        var toplamPoliceSayisi = await policeQuery.CountAsync(cancellationToken);
+        // Toplam poliçe sayısı (tarih aralığına göre filtrelenmiş)
+        var toplamPoliceSayisi = currentPoliceler.Count;
 
         // Müşteri sayısı
         var musteriQuery = _context.Musteriler.AsQueryable();
@@ -180,8 +180,8 @@ public class GetDashboardStatsQueryHandler : IRequestHandler<GetDashboardStatsQu
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Toplam yakalanan poliçe sayısı
-        var toplamPoliceSayisi = await yakalamaQuery.CountAsync(cancellationToken);
+        // Toplam yakalanan poliçe sayısı (tarih aralığına göre filtrelenmiş)
+        var toplamPoliceSayisi = currentYakalanan.Count;
 
         // Müşteri sayısı
         var musteriQuery = _context.Musteriler.AsQueryable();
