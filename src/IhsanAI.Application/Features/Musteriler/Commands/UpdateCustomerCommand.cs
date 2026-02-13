@@ -26,6 +26,7 @@ public record UpdateCustomerCommand(
     [property: JsonPropertyName("meslek")] string? Meslek = null,
     [property: JsonPropertyName("yasadigiIl")] string? YasadigiIl = null,
     [property: JsonPropertyName("yasadigiIlce")] string? YasadigiIlce = null,
+    [property: JsonPropertyName("adres")] string? Adres = null,
     [property: JsonPropertyName("boy")] int? Boy = null,
     [property: JsonPropertyName("kilo")] int? Kilo = null
 ) : IRequest<UpdateCustomerResultDto>;
@@ -158,6 +159,9 @@ public class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustomerComman
 
         if (request.YasadigiIlce != null)
             musteri.YasadigiIlce = request.YasadigiIlce;
+
+        if (request.Adres != null)
+            musteri.Adres = request.Adres;
 
         if (request.Boy.HasValue)
             musteri.Boy = request.Boy.Value;

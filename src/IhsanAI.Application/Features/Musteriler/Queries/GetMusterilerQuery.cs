@@ -110,6 +110,7 @@ public record MusteriDetailDto
     public string? Meslek { get; init; }
     public string? YasadigiIl { get; init; }
     public string? YasadigiIlce { get; init; }
+    public string? Adres { get; init; }
     public int? Boy { get; init; }
     public int? Kilo { get; init; }
     public int? EkleyenFirmaId { get; init; }
@@ -180,6 +181,7 @@ public class GetMusteriByIdQueryHandler : IRequestHandler<GetMusteriByIdQuery, M
             Meslek = musteri.Meslek,
             YasadigiIl = musteri.YasadigiIl,
             YasadigiIlce = musteri.YasadigiIlce,
+            Adres = musteri.Adres,
             Boy = musteri.Boy,
             Kilo = musteri.Kilo,
             EkleyenFirmaId = musteri.EkleyenFirmaId,

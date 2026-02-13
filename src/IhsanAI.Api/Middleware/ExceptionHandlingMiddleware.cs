@@ -62,7 +62,9 @@ public class ExceptionHandlingMiddleware
                 HttpStatusCode.InternalServerError,
                 new[] { new Error("ServerError",
                     _environment.IsDevelopment()
-                        ? exception.Message
+                        ? (exception.InnerException != null
+                            ? $"{exception.Message} | Inner: {exception.InnerException.Message}"
+                            : exception.Message)
                         : $"Bir hata oluştu. Hata kodu: {errorId}") }
             )
         };

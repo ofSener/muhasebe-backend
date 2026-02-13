@@ -31,6 +31,7 @@ public interface IApplicationDbContext
     DbSet<DriveUploadLog> DriveUploadLogs { get; }
     DbSet<Brans> Branslar { get; }
     DbSet<MuhasebeKullaniciToken> MuhasebeKullaniciTokens { get; }
+    DbSet<MusteriNot> MusteriNotlari { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -106,6 +106,45 @@ public static class MusterilerEndpoints
         .WithName("MergeCustomers")
         .WithDescription("İki müşteri kaydını birleştirir");
 
+        // --- Müşteri Detay & Notlar ---
+
+        group.MapGet("/{id:int}/details", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetMusteriDetailsQuery(id));
+            return result is not null ? Results.Ok(result) : Results.NotFound();
+        })
+        .WithName("GetMusteriDetails")
+        .WithDescription("Müşteri detay bilgilerini getirir")
+        .RequireAuthorization("CanViewCustomerDetail");
+
+        group.MapPost("/{id:int}/notes", async (int id, AddMusteriNotCommand command, IMediator mediator) =>
+        {
+            var commandWithId = command with { MusteriId = id };
+            var result = await mediator.Send(commandWithId);
+            return result.Success ? Results.Created($"/api/customers/{id}/notes/{result.NotId}", result) : Results.BadRequest(result);
+        })
+        .WithName("AddMusteriNot")
+        .WithDescription("Müşteriye not ekler")
+        .RequireAuthorization("CanViewCustomerDetail");
+
+        group.MapDelete("/{id:int}/notes/{noteId:int}", async (int id, int noteId, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new DeleteMusteriNotCommand(id, noteId));
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        })
+        .WithName("DeleteMusteriNot")
+        .WithDescription("Müşteri notunu siler")
+        .RequireAuthorization("CanViewCustomerDetail");
+
+        group.MapGet("/{id:int}/pool-policies", async (int id, IMediator mediator) =>
+        {
+            var result = await mediator.Send(new GetMusteriHavuzPoliceleriQuery(id));
+            return Results.Ok(result);
+        })
+        .WithName("GetMusteriHavuzPoliceleri")
+        .WithDescription("Müşterinin havuz poliçelerini getirir")
+        .RequireAuthorization("CanViewCustomerDetail");
+
         return app;
     }
 }

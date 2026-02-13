@@ -38,6 +38,8 @@ public class CustomerMatchingService : ICustomerMatchingService
 
             if (musteri != null)
             {
+                // Mevcut müşterinin boş alanlarını güncelle
+                await UpdateExistingCustomerFieldsAsync(musteri, request, ct);
                 return new CustomerMatchResult
                 {
                     MusteriId = musteri.Id,
@@ -47,8 +49,7 @@ public class CustomerMatchingService : ICustomerMatchingService
             }
 
             // TC var ama müşteri yok → otomatik oluştur
-            var newMusteri = await AutoCreateCustomerAsync(
-                request.SigortaliAdi, request.TcKimlikNo, null, firmaId, ct);
+            var newMusteri = await AutoCreateCustomerAsync(request, request.TcKimlikNo, null, firmaId, ct);
             return new CustomerMatchResult
             {
                 MusteriId = newMusteri.Id,
@@ -68,6 +69,8 @@ public class CustomerMatchingService : ICustomerMatchingService
 
             if (musteri != null)
             {
+                // Mevcut müşterinin boş alanlarını güncelle
+                await UpdateExistingCustomerFieldsAsync(musteri, request, ct);
                 return new CustomerMatchResult
                 {
                     MusteriId = musteri.Id,
@@ -77,8 +80,7 @@ public class CustomerMatchingService : ICustomerMatchingService
             }
 
             // VKN var ama müşteri yok → otomatik oluştur (kurumsal)
-            var newMusteri = await AutoCreateCustomerAsync(
-                request.SigortaliAdi, null, request.VergiNo, firmaId, ct);
+            var newMusteri = await AutoCreateCustomerAsync(request, null, request.VergiNo, firmaId, ct);
             return new CustomerMatchResult
             {
                 MusteriId = newMusteri.Id,
@@ -113,26 +115,11 @@ public class CustomerMatchingService : ICustomerMatchingService
 
                     if (normalizedRequest != normalizedExisting)
                     {
-                        // İsim uyuşmuyor - araç el değiştirmiş olabilir, aday olarak dön
-                        var candidateMusteri = await _context.Musteriler
-                            .Where(m => m.Id == plakaMatch.MusteriId)
-                            .Select(m => new CustomerCandidate
-                            {
-                                MusteriId = m.Id,
-                                Adi = m.Adi,
-                                Soyadi = m.Soyadi,
-                                TcKimlikNo = m.TcKimlikNo,
-                                VergiNo = m.VergiNo,
-                                Confidence = MatchConfidence.Low,
-                                MatchedBy = MatchSignal.Plaka
-                            })
-                            .FirstOrDefaultAsync(ct);
-
+                        // İsim uyuşmuyor - araç el değiştirmiş olabilir
                         return new CustomerMatchResult
                         {
                             Confidence = MatchConfidence.Low,
-                            MatchedBy = MatchSignal.Plaka,
-                            Candidates = candidateMusteri != null ? new List<CustomerCandidate> { candidateMusteri } : new()
+                            MatchedBy = MatchSignal.Plaka
                         };
                     }
                 }
@@ -146,36 +133,7 @@ public class CustomerMatchingService : ICustomerMatchingService
             }
         }
 
-        // 4. İsim ile eşleştir (en düşük güvenilirlik)
-        if (!string.IsNullOrWhiteSpace(request.SigortaliAdi))
-        {
-            var normalizedName = NormalizeTurkish(request.SigortaliAdi);
-            var candidates = await FindByNameAsync(normalizedName, firmaId, ct);
-
-            if (candidates.Count == 1)
-            {
-                return new CustomerMatchResult
-                {
-                    MusteriId = candidates[0].MusteriId,
-                    Confidence = MatchConfidence.Medium,
-                    MatchedBy = MatchSignal.Name,
-                    Candidates = candidates
-                };
-            }
-
-            if (candidates.Count > 1)
-            {
-                // Birden fazla aday - otomatik atama yapma
-                return new CustomerMatchResult
-                {
-                    Confidence = MatchConfidence.Low,
-                    MatchedBy = MatchSignal.Name,
-                    Candidates = candidates
-                };
-            }
-        }
-
-        // Hiçbir eşleşme bulunamadı
+        // İsim ile eşleştirme yapılmaz - güvenilirliği düşük
         return new CustomerMatchResult
         {
             Confidence = MatchConfidence.None,
@@ -189,7 +147,7 @@ public class CustomerMatchingService : ICustomerMatchingService
         var results = new Dictionary<int, CustomerMatchResult>();
         if (requests.Count == 0) return results;
 
-        // Firma müşterilerini toplu yükle
+        // Firma müşterilerini toplu yükle (boş alan kontrolü için ek alanlar dahil)
         var musteriler = await _context.Musteriler
             .Where(m => m.EkleyenFirmaId == firmaId)
             .Select(m => new
@@ -201,7 +159,6 @@ public class CustomerMatchingService : ICustomerMatchingService
         // Lookup dictionary'leri oluştur
         var tcLookup = new Dictionary<string, int>(StringComparer.Ordinal);
         var vknLookup = new Dictionary<string, int>(StringComparer.Ordinal);
-        var nameLookup = new Dictionary<string, List<(int Id, string? Adi, string? Soyadi, string? TcKimlikNo, string? VergiNo)>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var m in musteriler)
         {
@@ -210,22 +167,6 @@ public class CustomerMatchingService : ICustomerMatchingService
 
             if (!string.IsNullOrWhiteSpace(m.VergiNo) && !vknLookup.ContainsKey(m.VergiNo))
                 vknLookup[m.VergiNo] = m.Id;
-
-            var fullName = NormalizeTurkish(((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim());
-            if (!string.IsNullOrEmpty(fullName))
-            {
-                if (!nameLookup.ContainsKey(fullName))
-                    nameLookup[fullName] = new();
-                nameLookup[fullName].Add((m.Id, m.Adi, m.Soyadi, m.TcKimlikNo, m.VergiNo));
-            }
-
-            var firstName = NormalizeTurkish((m.Adi ?? "").Trim());
-            if (!string.IsNullOrEmpty(firstName) && firstName != fullName)
-            {
-                if (!nameLookup.ContainsKey(firstName))
-                    nameLookup[firstName] = new();
-                nameLookup[firstName].Add((m.Id, m.Adi, m.Soyadi, m.TcKimlikNo, m.VergiNo));
-            }
         }
 
         // Plaka lookup: son 2 yılda kullanılan plakalar
@@ -258,6 +199,13 @@ public class CustomerMatchingService : ICustomerMatchingService
 
         // Her satır için eşleştir
         var newCustomersToCreate = new List<(int RowIndex, Musteri Musteri, MatchSignal Signal)>();
+        // Aynı batch'te aynı TC/VKN ile birden fazla satır varsa, aynı entity'yi paylaşsınlar
+        var pendingTcEntities = new Dictionary<string, Musteri>(StringComparer.Ordinal);
+        var pendingVknEntities = new Dictionary<string, Musteri>(StringComparer.Ordinal);
+        // SaveChanges sonrası pending entity'den ID alacak satırlar
+        var pendingRows = new List<(int RowIndex, Musteri Musteri, MatchSignal Signal)>();
+        // Mevcut müşterilerin boş alanlarını güncellemek için (MusteriId, Request)
+        var customersToUpdate = new List<(int MusteriId, CustomerMatchRequest Request)>();
 
         foreach (var req in requests)
         {
@@ -266,6 +214,7 @@ public class CustomerMatchingService : ICustomerMatchingService
             {
                 if (tcLookup.TryGetValue(req.TcKimlikNo, out var tcMusteriId))
                 {
+                    customersToUpdate.Add((tcMusteriId, req));
                     results[req.RowIndex] = new CustomerMatchResult
                     {
                         MusteriId = tcMusteriId,
@@ -275,9 +224,17 @@ public class CustomerMatchingService : ICustomerMatchingService
                     continue;
                 }
 
+                // Aynı batch'te bu TC için zaten müşteri oluşturuldu mu?
+                if (pendingTcEntities.TryGetValue(req.TcKimlikNo, out var pendingMusteri))
+                {
+                    pendingRows.Add((req.RowIndex, pendingMusteri, MatchSignal.TcKimlikNo));
+                    continue;
+                }
+
                 // Yeni müşteri oluşturulacak
-                var newMusteri = CreateMusteriEntity(req.SigortaliAdi, req.TcKimlikNo, null, firmaId);
+                var newMusteri = CreateMusteriEntity(req, req.TcKimlikNo, null, firmaId);
                 newCustomersToCreate.Add((req.RowIndex, newMusteri, MatchSignal.TcKimlikNo));
+                pendingTcEntities[req.TcKimlikNo] = newMusteri;
                 continue;
             }
 
@@ -286,6 +243,7 @@ public class CustomerMatchingService : ICustomerMatchingService
             {
                 if (vknLookup.TryGetValue(req.VergiNo, out var vknMusteriId))
                 {
+                    customersToUpdate.Add((vknMusteriId, req));
                     results[req.RowIndex] = new CustomerMatchResult
                     {
                         MusteriId = vknMusteriId,
@@ -295,8 +253,16 @@ public class CustomerMatchingService : ICustomerMatchingService
                     continue;
                 }
 
-                var newMusteri = CreateMusteriEntity(req.SigortaliAdi, null, req.VergiNo, firmaId);
+                // Aynı batch'te bu VKN için zaten müşteri oluşturuldu mu?
+                if (pendingVknEntities.TryGetValue(req.VergiNo, out var pendingVknMusteri))
+                {
+                    pendingRows.Add((req.RowIndex, pendingVknMusteri, MatchSignal.VergiNo));
+                    continue;
+                }
+
+                var newMusteri = CreateMusteriEntity(req, null, req.VergiNo, firmaId);
                 newCustomersToCreate.Add((req.RowIndex, newMusteri, MatchSignal.VergiNo));
+                pendingVknEntities[req.VergiNo] = newMusteri;
                 continue;
             }
 
@@ -314,7 +280,7 @@ public class CustomerMatchingService : ICustomerMatchingService
 
                         if (normReq != normExist)
                         {
-                            // İsim uyuşmuyor, sadece aday olarak dön
+                            // İsim uyuşmuyor - eşleştirme yapma
                             results[req.RowIndex] = new CustomerMatchResult
                             {
                                 Confidence = MatchConfidence.Low,
@@ -334,44 +300,7 @@ public class CustomerMatchingService : ICustomerMatchingService
                 }
             }
 
-            // 4. İsim eşleştir
-            if (!string.IsNullOrWhiteSpace(req.SigortaliAdi))
-            {
-                var normalizedName = NormalizeTurkish(req.SigortaliAdi);
-                if (nameLookup.TryGetValue(normalizedName, out var nameMatches))
-                {
-                    if (nameMatches.Count == 1)
-                    {
-                        results[req.RowIndex] = new CustomerMatchResult
-                        {
-                            MusteriId = nameMatches[0].Id,
-                            Confidence = MatchConfidence.Medium,
-                            MatchedBy = MatchSignal.Name
-                        };
-                        continue;
-                    }
-
-                    // Birden fazla aday - otomatik atama yapma
-                    results[req.RowIndex] = new CustomerMatchResult
-                    {
-                        Confidence = MatchConfidence.Low,
-                        MatchedBy = MatchSignal.Name,
-                        Candidates = nameMatches.Select(m => new CustomerCandidate
-                        {
-                            MusteriId = m.Id,
-                            Adi = m.Adi,
-                            Soyadi = m.Soyadi,
-                            TcKimlikNo = m.TcKimlikNo,
-                            VergiNo = m.VergiNo,
-                            Confidence = MatchConfidence.Low,
-                            MatchedBy = MatchSignal.Name
-                        }).ToList()
-                    };
-                    continue;
-                }
-            }
-
-            // Eşleşme yok
+            // İsim ile eşleştirme yapılmaz - güvenilirliği düşük
             results[req.RowIndex] = new CustomerMatchResult
             {
                 Confidence = MatchConfidence.None,
@@ -405,6 +334,24 @@ public class CustomerMatchingService : ICustomerMatchingService
                 if (!string.IsNullOrWhiteSpace(musteri.VergiNo))
                     vknLookup[musteri.VergiNo] = musteri.Id;
             }
+
+            // Aynı TC/VKN'yi paylaşan pending satırları da güncelle (SaveChanges sonrası ID artık mevcut)
+            foreach (var (rowIndex, musteri, signal) in pendingRows)
+            {
+                results[rowIndex] = new CustomerMatchResult
+                {
+                    MusteriId = musteri.Id,
+                    Confidence = MatchConfidence.Exact,
+                    MatchedBy = signal,
+                    AutoCreated = false
+                };
+            }
+        }
+
+        // Mevcut müşterilerin boş alanlarını toplu güncelle (ExecuteUpdateAsync ile)
+        if (customersToUpdate.Count > 0)
+        {
+            await BatchUpdateExistingCustomerFieldsAsync(customersToUpdate, firmaId, ct);
         }
 
         return results;
@@ -453,65 +400,60 @@ public class CustomerMatchingService : ICustomerMatchingService
         return true;
     }
 
-    private async Task<List<CustomerCandidate>> FindByNameAsync(string normalizedName, int firmaId, CancellationToken ct)
-    {
-        // DB'den tüm müşterileri çekmek yerine, isim parçaları ile filtrele
-        var parts = normalizedName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0) return new();
-
-        // İlk parça (ad) ile ön-filtreleme
-        var firstPart = parts[0];
-
-        var candidates = await _context.Musteriler
-            .Where(m => m.EkleyenFirmaId == firmaId && m.Adi != null)
-            .Select(m => new { m.Id, m.Adi, m.Soyadi, m.TcKimlikNo, m.VergiNo })
-            .ToListAsync(ct);
-
-        var matched = new List<CustomerCandidate>();
-        foreach (var m in candidates)
-        {
-            var fullName = NormalizeTurkish(((m.Adi ?? "") + " " + (m.Soyadi ?? "")).Trim());
-            var firstName = NormalizeTurkish((m.Adi ?? "").Trim());
-
-            if (fullName == normalizedName || firstName == normalizedName)
-            {
-                matched.Add(new CustomerCandidate
-                {
-                    MusteriId = m.Id,
-                    Adi = m.Adi,
-                    Soyadi = m.Soyadi,
-                    TcKimlikNo = m.TcKimlikNo,
-                    VergiNo = m.VergiNo,
-                    Confidence = fullName == normalizedName ? MatchConfidence.Medium : MatchConfidence.Low,
-                    MatchedBy = MatchSignal.Name
-                });
-            }
-        }
-
-        return matched;
-    }
-
     private async Task<Musteri> AutoCreateCustomerAsync(
-        string? sigortaliAdi, string? tcKimlikNo, string? vergiNo, int firmaId, CancellationToken ct)
+        CustomerMatchRequest request, string? tcKimlikNo, string? vergiNo, int firmaId, CancellationToken ct)
     {
-        var musteri = CreateMusteriEntity(sigortaliAdi, tcKimlikNo, vergiNo, firmaId);
+        var musteri = CreateMusteriEntity(request, tcKimlikNo, vergiNo, firmaId);
         _context.Musteriler.Add(musteri);
         await _context.SaveChangesAsync(ct);
         return musteri;
     }
 
-    private Musteri CreateMusteriEntity(string? sigortaliAdi, string? tcKimlikNo, string? vergiNo, int firmaId)
+    private Musteri CreateMusteriEntity(CustomerMatchRequest request, string? tcKimlikNo, string? vergiNo, int firmaId)
     {
-        // İsimden ad/soyad ayırma
+        var (adi, soyadi) = SplitAdSoyad(request.SigortaliAdi, request.SigortaliSoyadi);
+
+        var adres = request.Adres?.Trim();
+        if (adres != null && adres.Length > 500) adres = adres[..500];
+
+        return new Musteri
+        {
+            SahipTuru = vergiNo != null ? (sbyte)2 : (sbyte)1, // 1=Bireysel, 2=Kurumsal
+            TcKimlikNo = tcKimlikNo?.Length > 11 ? tcKimlikNo[..11] : tcKimlikNo,
+            VergiNo = vergiNo?.Length > 10 ? vergiNo[..10] : vergiNo,
+            TcVergiNo = (tcKimlikNo ?? vergiNo) is { Length: > 11 } tv ? tv[..11] : (tcKimlikNo ?? vergiNo),
+            Adi = adi,
+            Soyadi = soyadi,
+            Adres = adres,
+            EkleyenFirmaId = firmaId,
+            EkleyenUyeId = int.TryParse(_currentUserService.UserId, out var uid) ? uid : null,
+            EkleyenSubeId = _currentUserService.SubeId,
+            EklenmeZamani = _dateTimeService.Now
+        };
+    }
+
+    /// <summary>
+    /// Ad/Soyad ayırma: Soyad ayrı gelmişse kullan, gelmemişse son kelimeyi soyad yap.
+    /// </summary>
+    private static (string? Adi, string? Soyadi) SplitAdSoyad(string? sigortaliAdi, string? sigortaliSoyadi)
+    {
         string? adi = null;
         string? soyadi = null;
-        if (!string.IsNullOrWhiteSpace(sigortaliAdi))
+
+        if (!string.IsNullOrWhiteSpace(sigortaliSoyadi))
         {
+            // Soyad ayrı gelmiş (Quick, Doğa, Koru, Unico parser'ları)
+            adi = sigortaliAdi?.Trim();
+            soyadi = sigortaliSoyadi.Trim();
+        }
+        else if (!string.IsNullOrWhiteSpace(sigortaliAdi))
+        {
+            // Soyad ayrı gelmemiş - son kelimeyi soyad yap
             var parts = sigortaliAdi.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2)
             {
-                soyadi = parts[^1]; // Son kelime soyad
-                adi = string.Join(" ", parts[..^1]); // Geri kalanı ad
+                soyadi = parts[^1];
+                adi = string.Join(" ", parts[..^1]);
             }
             else
             {
@@ -519,18 +461,149 @@ public class CustomerMatchingService : ICustomerMatchingService
             }
         }
 
-        return new Musteri
+        // DB sütun limitlerine göre truncate
+        if (adi != null && adi.Length > 150) adi = adi[..150];
+        if (soyadi != null && soyadi.Length > 30) soyadi = soyadi[..30];
+
+        return (adi, soyadi);
+    }
+
+    /// <summary>
+    /// FindBestMatchAsync'te mevcut müşterinin boş alanlarını günceller (tek kayıt).
+    /// </summary>
+    private async Task UpdateExistingCustomerFieldsAsync(
+        Musteri musteri, CustomerMatchRequest request, CancellationToken ct)
+    {
+        var (adi, soyadi) = SplitAdSoyad(request.SigortaliAdi, request.SigortaliSoyadi);
+        var needsUpdate = false;
+
+        if (string.IsNullOrWhiteSpace(musteri.Adi) && !string.IsNullOrWhiteSpace(adi))
         {
-            SahipTuru = vergiNo != null ? (sbyte)2 : (sbyte)1, // 1=Bireysel, 2=Kurumsal
-            TcKimlikNo = tcKimlikNo,
-            VergiNo = vergiNo,
-            TcVergiNo = tcKimlikNo ?? vergiNo,
-            Adi = adi,
-            Soyadi = soyadi,
-            EkleyenFirmaId = firmaId,
-            EkleyenUyeId = int.TryParse(_currentUserService.UserId, out var uid) ? uid : null,
-            EkleyenSubeId = _currentUserService.SubeId,
-            EklenmeZamani = _dateTimeService.Now
-        };
+            musteri.Adi = adi;
+            needsUpdate = true;
+        }
+        if (string.IsNullOrWhiteSpace(musteri.Soyadi) && !string.IsNullOrWhiteSpace(soyadi))
+        {
+            musteri.Soyadi = soyadi;
+            needsUpdate = true;
+        }
+        if (string.IsNullOrWhiteSpace(musteri.TcKimlikNo) && !string.IsNullOrWhiteSpace(request.TcKimlikNo) && IsValidTc(request.TcKimlikNo))
+        {
+            musteri.TcKimlikNo = request.TcKimlikNo;
+            musteri.TcVergiNo = request.TcKimlikNo;
+            needsUpdate = true;
+        }
+        if (string.IsNullOrWhiteSpace(musteri.VergiNo) && !string.IsNullOrWhiteSpace(request.VergiNo) && IsValidVkn(request.VergiNo))
+        {
+            musteri.VergiNo = request.VergiNo;
+            if (string.IsNullOrWhiteSpace(musteri.TcVergiNo))
+                musteri.TcVergiNo = request.VergiNo;
+            needsUpdate = true;
+        }
+        if (string.IsNullOrWhiteSpace(musteri.Adres) && !string.IsNullOrWhiteSpace(request.Adres))
+        {
+            var adres = request.Adres.Trim();
+            musteri.Adres = adres.Length > 500 ? adres[..500] : adres;
+            needsUpdate = true;
+        }
+
+        // SahipTuru: TC varsa Bireysel(1), VKN varsa Kurumsal(2)
+        if (musteri.SahipTuru == null || musteri.SahipTuru == 0)
+        {
+            var tcExists = !string.IsNullOrWhiteSpace(musteri.TcKimlikNo) || (!string.IsNullOrWhiteSpace(request.TcKimlikNo) && IsValidTc(request.TcKimlikNo));
+            var vknExists = !string.IsNullOrWhiteSpace(musteri.VergiNo) || (!string.IsNullOrWhiteSpace(request.VergiNo) && IsValidVkn(request.VergiNo));
+            if (vknExists && !tcExists)
+            {
+                musteri.SahipTuru = 2; // Kurumsal
+                needsUpdate = true;
+            }
+            else if (tcExists)
+            {
+                musteri.SahipTuru = 1; // Bireysel
+                needsUpdate = true;
+            }
+        }
+
+        if (needsUpdate)
+        {
+            musteri.GuncellenmeZamani = _dateTimeService.Now;
+            await _context.SaveChangesAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// BatchMatchAsync'te mevcut müşterilerin boş alanlarını toplu günceller (ExecuteUpdateAsync).
+    /// </summary>
+    private async Task BatchUpdateExistingCustomerFieldsAsync(
+        List<(int MusteriId, CustomerMatchRequest Request)> updates, int firmaId, CancellationToken ct)
+    {
+        try
+        {
+            // Aynı müşteri birden fazla satırda olabilir - ilk request'i al
+            var uniqueUpdates = updates
+                .GroupBy(u => u.MusteriId)
+                .Select(g => g.First())
+                .ToList();
+
+            var musteriIds = uniqueUpdates.Select(u => u.MusteriId).ToList();
+
+            // Mevcut müşteri bilgilerini oku (hangi alanlar boş?)
+            var existingCustomers = await _context.Musteriler
+                .AsNoTracking()
+                .Where(m => musteriIds.Contains(m.Id) && m.EkleyenFirmaId == firmaId)
+                .Select(m => new { m.Id, m.Adi, m.Soyadi, m.TcKimlikNo, m.VergiNo, m.TcVergiNo, m.Adres, m.SahipTuru })
+                .ToListAsync(ct);
+
+            var customerDict = existingCustomers.ToDictionary(c => c.Id);
+            var now = _dateTimeService.Now;
+
+            foreach (var (musteriId, req) in uniqueUpdates)
+            {
+                if (!customerDict.TryGetValue(musteriId, out var existing)) continue;
+
+                var (adi, soyadi) = SplitAdSoyad(req.SigortaliAdi, req.SigortaliSoyadi);
+
+                var newAdi = string.IsNullOrWhiteSpace(existing.Adi) && !string.IsNullOrWhiteSpace(adi) ? adi : null;
+                var newSoyadi = string.IsNullOrWhiteSpace(existing.Soyadi) && !string.IsNullOrWhiteSpace(soyadi) ? soyadi : null;
+                var newTc = string.IsNullOrWhiteSpace(existing.TcKimlikNo) && !string.IsNullOrWhiteSpace(req.TcKimlikNo) && IsValidTc(req.TcKimlikNo) ? req.TcKimlikNo : null;
+                var newVkn = string.IsNullOrWhiteSpace(existing.VergiNo) && !string.IsNullOrWhiteSpace(req.VergiNo) && IsValidVkn(req.VergiNo) ? req.VergiNo : null;
+                var newAdres = string.IsNullOrWhiteSpace(existing.Adres) && !string.IsNullOrWhiteSpace(req.Adres)
+                    ? (req.Adres.Trim().Length > 500 ? req.Adres.Trim()[..500] : req.Adres.Trim())
+                    : null;
+
+                // SahipTuru: NULL/0 ise TC→Bireysel(1), VKN→Kurumsal(2)
+                sbyte? newSahipTuru = null;
+                if (existing.SahipTuru == null || existing.SahipTuru == 0)
+                {
+                    var tcExists = !string.IsNullOrWhiteSpace(existing.TcKimlikNo) || !string.IsNullOrWhiteSpace(newTc);
+                    var vknExists = !string.IsNullOrWhiteSpace(existing.VergiNo) || !string.IsNullOrWhiteSpace(newVkn);
+                    if (vknExists && !tcExists)
+                        newSahipTuru = 2; // Kurumsal
+                    else if (tcExists)
+                        newSahipTuru = 1; // Bireysel
+                }
+
+                if (newAdi != null || newSoyadi != null || newTc != null || newVkn != null || newAdres != null || newSahipTuru != null)
+                {
+                    var id = musteriId;
+                    await _context.Musteriler
+                        .Where(m => m.Id == id)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(m => m.Adi, m => newAdi ?? m.Adi)
+                            .SetProperty(m => m.Soyadi, m => newSoyadi ?? m.Soyadi)
+                            .SetProperty(m => m.TcKimlikNo, m => newTc ?? m.TcKimlikNo)
+                            .SetProperty(m => m.VergiNo, m => newVkn ?? m.VergiNo)
+                            .SetProperty(m => m.TcVergiNo, m => (newTc ?? newVkn) != null ? (newTc ?? newVkn ?? m.TcVergiNo) : m.TcVergiNo)
+                            .SetProperty(m => m.Adres, m => newAdres ?? m.Adres)
+                            .SetProperty(m => m.SahipTuru, m => newSahipTuru ?? m.SahipTuru)
+                            .SetProperty(m => m.GuncellenmeZamani, now), ct);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Mevcut müşteri boş alan güncelleme hatası (import'u etkilemez): {Message}",
+                ex.InnerException?.Message ?? ex.Message);
+        }
     }
 }

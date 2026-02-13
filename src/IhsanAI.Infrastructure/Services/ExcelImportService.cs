@@ -269,6 +269,7 @@ public class ExcelImportService : IExcelImportService
         var errors = new List<ExcelImportErrorDto>();
         var successCount = 0;
         var duplicateCount = 0;
+        var updatedCount = 0;
         var newCustomersCreated = 0;
 
         // Satırları al (temp dosyadan veya cache'ten)
@@ -303,6 +304,9 @@ public class ExcelImportService : IExcelImportService
             .Select(p => $"{p.PoliceNo}_{p.ZeyilNo}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Mükerrer güncelleme için satırları topla
+        var duplicateRowsForUpdate = new List<(ExcelImportRowDto Row, int? MusteriId)>();
+
         // Müşteri eşleştirme: Çoklu sinyal (TC > VKN > Plaka > İsim)
         var firmaId = _currentUserService.FirmaId ?? 0;
         var matchRequests = validRows
@@ -313,6 +317,8 @@ public class ExcelImportService : IExcelImportService
                 TcKimlikNo = r.Tckn,
                 VergiNo = r.Vkn,
                 SigortaliAdi = r.SigortaliAdi,
+                SigortaliSoyadi = r.SigortaliSoyadi,
+                Adres = r.Adres,
                 Plaka = r.Plaka,
                 FirmaId = firmaId
             })
@@ -331,7 +337,14 @@ public class ExcelImportService : IExcelImportService
                 var policyKey = $"{row.PoliceNo}_{GetZeyilNoAsInt(row.ZeyilNo)}";
                 if (existingPolicyKeys.Contains(policyKey))
                 {
-                    duplicateCount++;
+                    // Müşteri eşleştirme sonuçlarından al (güncelleme için lazım)
+                    var dupMusteriId = row.MusteriId;
+                    if (!dupMusteriId.HasValue && matchResults.TryGetValue(row.RowNumber, out var dupMatchResult))
+                    {
+                        dupMusteriId = dupMatchResult.MusteriId;
+                        if (dupMatchResult.AutoCreated) newCustomersCreated++;
+                    }
+                    duplicateRowsForUpdate.Add((row, dupMusteriId));
                     continue;
                 }
                 existingPolicyKeys.Add(policyKey);
@@ -391,7 +404,7 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        // ExecutionStrategy ile transaction (MySqlRetryingExecutionStrategy uyumlu)
+        // ExecutionStrategy ile transaction (MySqlRetryingExecutionStrategy uyumlu) - önce yeni kayıtları kaydet
         _logger.LogInformation("SaveChanges başlatılıyor: {Count} kayıt eklenecek", successCount);
         var strategy = _context.Database.CreateExecutionStrategy();
         try
@@ -414,13 +427,82 @@ public class ExcelImportService : IExcelImportService
             };
         }
 
+        // Mükerrer kayıtlarda eksik alanları güncelle (ExecuteUpdateAsync - ChangeTracker dışında)
+        if (duplicateRowsForUpdate.Count > 0)
+        {
+            try
+            {
+                var dupPoliceNos = duplicateRowsForUpdate
+                    .Select(d => d.Row.PoliceNo!)
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .Distinct()
+                    .ToList();
+
+                var existingRecords = await _context.PoliceHavuzlari
+                    .AsNoTracking()
+                    .Where(p => dupPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
+                    .Select(p => new { p.Id, p.PoliceNo, p.ZeyilNo, p.TcKimlikNo, p.VergiNo, p.MusteriId, p.Plaka, p.BransId })
+                    .ToListAsync();
+
+                var recordDict = existingRecords
+                    .GroupBy(p => $"{p.PoliceNo}_{p.ZeyilNo}", StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                var processedIds = new HashSet<int>();
+                var now = _dateTimeService.Now;
+
+                foreach (var (dupRow, dupMusteriId) in duplicateRowsForUpdate)
+                {
+                    var key = $"{dupRow.PoliceNo}_{GetZeyilNoAsInt(dupRow.ZeyilNo)}";
+                    if (recordDict.TryGetValue(key, out var existing) && processedIds.Add(existing.Id))
+                    {
+                        var tcValue = string.IsNullOrWhiteSpace(existing.TcKimlikNo) && !string.IsNullOrWhiteSpace(dupRow.Tckn) ? dupRow.Tckn : null;
+                        var vknValue = string.IsNullOrWhiteSpace(existing.VergiNo) && !string.IsNullOrWhiteSpace(dupRow.Vkn) ? dupRow.Vkn : null;
+                        var musteriValue = !existing.MusteriId.HasValue && dupMusteriId.HasValue ? dupMusteriId : null;
+                        var plakaValue = string.IsNullOrWhiteSpace(existing.Plaka) && !string.IsNullOrWhiteSpace(dupRow.Plaka) ? dupRow.Plaka : null;
+                        var bransValue = existing.BransId == 0 && (dupRow.BransId ?? 0) != 0 ? dupRow.BransId : null;
+
+                        if (tcValue != null || vknValue != null || musteriValue != null || plakaValue != null || bransValue != null)
+                        {
+                            var entityId = existing.Id;
+                            await _context.PoliceHavuzlari
+                                .Where(p => p.Id == entityId)
+                                .ExecuteUpdateAsync(s => s
+                                    .SetProperty(p => p.TcKimlikNo, p => tcValue ?? p.TcKimlikNo)
+                                    .SetProperty(p => p.VergiNo, p => vknValue ?? p.VergiNo)
+                                    .SetProperty(p => p.MusteriId, p => musteriValue ?? p.MusteriId)
+                                    .SetProperty(p => p.SigortaEttirenId, p => musteriValue ?? p.SigortaEttirenId)
+                                    .SetProperty(p => p.Plaka, p => plakaValue ?? p.Plaka)
+                                    .SetProperty(p => p.BransId, p => bransValue ?? p.BransId)
+                                    .SetProperty(p => p.GuncellenmeTarihi, now));
+                            updatedCount++;
+                        }
+                        else
+                        {
+                            duplicateCount++;
+                        }
+                    }
+                    else
+                    {
+                        duplicateCount++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Mükerrer güncelleme hatası (import'u etkilemez): {Message}", ex.InnerException?.Message ?? ex.Message);
+                // Exception öncesi döngüde sayılanları çift saymamak için = kullan (+= değil)
+                duplicateCount = duplicateRowsForUpdate.Count - updatedCount;
+            }
+        }
+
         // Session ve temp dosyayı temizle
         DeleteTempFile(session.TempFilePath);
         _cache.Remove(sessionId);
 
         _logger.LogInformation(
-            "Import tamamlandı: {SuccessCount} başarılı, {FailedCount} hatalı, {DuplicateCount} duplicate",
-            successCount, errors.Count, duplicateCount);
+            "Import tamamlandı: {SuccessCount} başarılı, {FailedCount} hatalı, {DuplicateCount} mükerrer, {UpdatedCount} güncellendi",
+            successCount, errors.Count, duplicateCount, updatedCount);
 
         return new ExcelImportResultDto
         {
@@ -429,6 +511,7 @@ public class ExcelImportService : IExcelImportService
             SuccessCount = successCount,
             FailedCount = errors.Count,
             DuplicateCount = duplicateCount,
+            UpdatedCount = updatedCount,
             NewCustomersCreated = newCustomersCreated,
             Errors = errors,
             TotalValidRows = validRows.Count,
@@ -466,6 +549,7 @@ public class ExcelImportService : IExcelImportService
         var errors = new List<ExcelImportErrorDto>();
         var successCount = 0;
         var duplicateCount = 0;
+        var updatedCount = 0;
 
         // Satırları al (ilk batch: temp dosyadan, sonraki batch'ler: hafızadan)
         var allRows = GetSessionRows(session);
@@ -532,6 +616,8 @@ public class ExcelImportService : IExcelImportService
                 TcKimlikNo = r.Tckn,
                 VergiNo = r.Vkn,
                 SigortaliAdi = r.SigortaliAdi,
+                SigortaliSoyadi = r.SigortaliSoyadi,
+                Adres = r.Adres,
                 Plaka = r.Plaka,
                 FirmaId = batchFirmaId
             })
@@ -544,6 +630,9 @@ public class ExcelImportService : IExcelImportService
         var existingPolicyKeys = session.CachedPolicyKeys;
         // ===== LOOKUP SONU =====
 
+        // Mükerrer güncelleme için satırları topla
+        var duplicateRowsForUpdate = new List<(ExcelImportRowDto Row, int? MusteriId)>();
+
         // Entity'leri hazırla
         foreach (var row in batchRows)
         {
@@ -553,7 +642,13 @@ public class ExcelImportService : IExcelImportService
                 var policyKey = $"{row.PoliceNo}_{GetZeyilNoAsInt(row.ZeyilNo)}";
                 if (existingPolicyKeys.Contains(policyKey))
                 {
-                    duplicateCount++;
+                    // Müşteri eşleştirme sonuçlarından al (güncelleme için lazım)
+                    var dupMusteriId = row.MusteriId;
+                    if (!dupMusteriId.HasValue && batchMatchResults.TryGetValue(row.RowNumber, out var dupMatchResult))
+                    {
+                        dupMusteriId = dupMatchResult.MusteriId;
+                    }
+                    duplicateRowsForUpdate.Add((row, dupMusteriId));
                     continue;
                 }
 
@@ -614,7 +709,7 @@ public class ExcelImportService : IExcelImportService
             }
         }
 
-        // SaveChangesAsync zaten implicit transaction kullanır (tek SaveChanges = atomik)
+        // Önce yeni kayıtları kaydet (SaveChanges sadece yeni eklenen entity'ler için)
         try
         {
             await _context.SaveChangesAsync();
@@ -630,6 +725,75 @@ public class ExcelImportService : IExcelImportService
             };
         }
 
+        // Mükerrer kayıtlarda eksik alanları güncelle (ExecuteUpdateAsync - ChangeTracker dışında)
+        if (duplicateRowsForUpdate.Count > 0)
+        {
+            try
+            {
+                var dupPoliceNos = duplicateRowsForUpdate
+                    .Select(d => d.Row.PoliceNo!)
+                    .Where(p => !string.IsNullOrEmpty(p))
+                    .Distinct()
+                    .ToList();
+
+                var existingRecords = await _context.PoliceHavuzlari
+                    .AsNoTracking()
+                    .Where(p => dupPoliceNos.Contains(p.PoliceNo) && p.SigortaSirketiId == session.SigortaSirketiId)
+                    .Select(p => new { p.Id, p.PoliceNo, p.ZeyilNo, p.TcKimlikNo, p.VergiNo, p.MusteriId, p.Plaka, p.BransId })
+                    .ToListAsync();
+
+                var recordDict = existingRecords
+                    .GroupBy(p => $"{p.PoliceNo}_{p.ZeyilNo}", StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                var processedIds = new HashSet<int>();
+                var now = _dateTimeService.Now;
+
+                foreach (var (dupRow, dupMusteriId) in duplicateRowsForUpdate)
+                {
+                    var key = $"{dupRow.PoliceNo}_{GetZeyilNoAsInt(dupRow.ZeyilNo)}";
+                    if (recordDict.TryGetValue(key, out var existing) && processedIds.Add(existing.Id))
+                    {
+                        var tcValue = string.IsNullOrWhiteSpace(existing.TcKimlikNo) && !string.IsNullOrWhiteSpace(dupRow.Tckn) ? dupRow.Tckn : null;
+                        var vknValue = string.IsNullOrWhiteSpace(existing.VergiNo) && !string.IsNullOrWhiteSpace(dupRow.Vkn) ? dupRow.Vkn : null;
+                        var musteriValue = !existing.MusteriId.HasValue && dupMusteriId.HasValue ? dupMusteriId : null;
+                        var plakaValue = string.IsNullOrWhiteSpace(existing.Plaka) && !string.IsNullOrWhiteSpace(dupRow.Plaka) ? dupRow.Plaka : null;
+                        var bransValue = existing.BransId == 0 && (dupRow.BransId ?? 0) != 0 ? dupRow.BransId : null;
+
+                        if (tcValue != null || vknValue != null || musteriValue != null || plakaValue != null || bransValue != null)
+                        {
+                            var entityId = existing.Id;
+                            await _context.PoliceHavuzlari
+                                .Where(p => p.Id == entityId)
+                                .ExecuteUpdateAsync(s => s
+                                    .SetProperty(p => p.TcKimlikNo, p => tcValue ?? p.TcKimlikNo)
+                                    .SetProperty(p => p.VergiNo, p => vknValue ?? p.VergiNo)
+                                    .SetProperty(p => p.MusteriId, p => musteriValue ?? p.MusteriId)
+                                    .SetProperty(p => p.SigortaEttirenId, p => musteriValue ?? p.SigortaEttirenId)
+                                    .SetProperty(p => p.Plaka, p => plakaValue ?? p.Plaka)
+                                    .SetProperty(p => p.BransId, p => bransValue ?? p.BransId)
+                                    .SetProperty(p => p.GuncellenmeTarihi, now));
+                            updatedCount++;
+                        }
+                        else
+                        {
+                            duplicateCount++;
+                        }
+                    }
+                    else
+                    {
+                        duplicateCount++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Batch mükerrer güncelleme hatası (import'u etkilemez): {Message}", ex.InnerException?.Message ?? ex.Message);
+                // Exception öncesi döngüde sayılanları çift saymamak için = kullan (+= değil)
+                duplicateCount = duplicateRowsForUpdate.Count - updatedCount;
+            }
+        }
+
         // Son batch ise session ve temp dosyayı temizle, değilse timeout'u uzat
         if (!hasMoreBatches)
         {
@@ -643,8 +807,8 @@ public class ExcelImportService : IExcelImportService
         }
 
         _logger.LogInformation(
-            "Batch tamamlandı: {SuccessCount} başarılı, {FailedCount} hatalı, {DuplicateCount} duplicate, Progress: {ProcessedSoFar}/{TotalValidRows}",
-            successCount, errors.Count, duplicateCount, processedSoFar, totalValidRows);
+            "Batch tamamlandı: {SuccessCount} başarılı, {FailedCount} hatalı, {DuplicateCount} mükerrer, {UpdatedCount} güncellendi, Progress: {ProcessedSoFar}/{TotalValidRows}",
+            successCount, errors.Count, duplicateCount, updatedCount, processedSoFar, totalValidRows);
 
         return new ExcelImportResultDto
         {
@@ -653,6 +817,7 @@ public class ExcelImportService : IExcelImportService
             SuccessCount = successCount,
             FailedCount = errors.Count,
             DuplicateCount = duplicateCount,
+            UpdatedCount = updatedCount,
             NewCustomersCreated = 0,
             Errors = errors,
             TotalValidRows = totalValidRows,

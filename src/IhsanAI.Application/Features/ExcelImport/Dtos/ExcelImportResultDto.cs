@@ -7,6 +7,7 @@ public record ExcelImportResultDto
     public int SuccessCount { get; init; }
     public int FailedCount { get; init; }
     public int DuplicateCount { get; init; }
+    public int UpdatedCount { get; init; }
     public int NewCustomersCreated { get; init; }
     public List<ExcelImportErrorDto> Errors { get; init; } = new();
     public string? ErrorMessage { get; init; }

@@ -23,6 +23,7 @@ public record CreateCustomerCommand(
     string? Meslek,
     string? YasadigiIl,
     string? YasadigiIlce,
+    string? Adres,
     int? Boy,
     int? Kilo,
     int? EkleyenFirmaId,
@@ -103,6 +104,7 @@ public class CreateCustomerCommandHandler : IRequestHandler<CreateCustomerComman
             Meslek = request.Meslek,
             YasadigiIl = request.YasadigiIl,
             YasadigiIlce = request.YasadigiIlce,
+            Adres = request.Adres,
             Boy = request.Boy,
             Kilo = request.Kilo,
             // GÜVENLİK: Token'dan otomatik al, client'a güvenme!

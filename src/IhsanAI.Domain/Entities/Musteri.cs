@@ -76,6 +76,10 @@ public class Musteri
     [MaxLength(20)]
     public string? YasadigiIlce { get; set; }
 
+    [Column("ADRES")]
+    [MaxLength(500)]
+    public string? Adres { get; set; }
+
     [Column("BOY")]
     public int? Boy { get; set; }
 

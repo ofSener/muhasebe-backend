@@ -2,7 +2,7 @@ namespace IhsanAI.Application.Common.Interfaces;
 
 /// <summary>
 /// Çoklu sinyal bazlı müşteri eşleştirme servisi.
-/// Öncelik sırası: TC Kimlik > Vergi No > Plaka > İsim
+/// Öncelik sırası: TC Kimlik > Vergi No > Plaka
 /// </summary>
 public interface ICustomerMatchingService
 {
@@ -24,6 +24,8 @@ public record CustomerMatchRequest
     public string? TcKimlikNo { get; init; }
     public string? VergiNo { get; init; }
     public string? SigortaliAdi { get; init; }
+    public string? SigortaliSoyadi { get; init; }
+    public string? Adres { get; init; }
     public string? Plaka { get; init; }
     public int FirmaId { get; init; }
 }
