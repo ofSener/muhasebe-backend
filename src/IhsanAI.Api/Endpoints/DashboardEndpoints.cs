@@ -51,14 +51,63 @@ public static class DashboardEndpoints
         group.MapGet("/aylik-trend", async (
             int? firmaId,
             int? months,
+            DateTime? startDate,
+            DateTime? endDate,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
             DashboardMode? mode,
             IMediator mediator) =>
         {
-            var result = await mediator.Send(new GetAylikTrendQuery(firmaId, months ?? 12, mode ?? DashboardMode.Onayli));
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetAylikTrendQuery(firmaId, months ?? 12, mode ?? DashboardMode.Onayli, startDate, endDate, filters));
             return Results.Ok(result);
         })
         .WithName("GetAylikTrend")
         .WithDescription("Aylık prim ve poliçe trendini getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
+
+        // Günlük trend
+        group.MapGet("/gunluk-trend", async (
+            int? firmaId,
+            DateTime? startDate,
+            DateTime? endDate,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
+            DashboardMode? mode,
+            IMediator mediator) =>
+        {
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetGunlukTrendQuery(firmaId, startDate, endDate, mode ?? DashboardMode.Onayli, filters));
+            return Results.Ok(result);
+        })
+        .WithName("GetGunlukTrend")
+        .WithDescription("Günlük prim ve poliçe trendini getirir. mode=0: Onaylı, mode=1: Yakalanan")
+        .RequireAuthorization("CanViewFinanceDashboard");
+
+        // Karşılaştırma trend
+        group.MapGet("/karsilastirma-trend", async (
+            int? firmaId,
+            DateTime? startDate,
+            DateTime? endDate,
+            string? groupBy,
+            string? entityIds,
+            string? bransIds,
+            string? kullaniciIds,
+            string? subeIds,
+            string? sirketIds,
+            DashboardMode? mode,
+            IMediator mediator) =>
+        {
+            var filters = new DashboardFilters(bransIds, kullaniciIds, subeIds, sirketIds);
+            var result = await mediator.Send(new GetKarsilastirmaTrendQuery(firmaId, startDate, endDate, groupBy ?? "calisan", entityIds, mode ?? DashboardMode.Onayli, filters));
+            return Results.Ok(result);
+        })
+        .WithName("GetKarsilastirmaTrend")
+        .WithDescription("Seçilen çalışan/şubeler için karşılaştırmalı trend verisini getirir. mode=0: Onaylı, mode=1: Yakalanan")
         .RequireAuthorization("CanViewFinanceDashboard");
 
         // Top performansçılar

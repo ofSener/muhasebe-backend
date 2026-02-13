@@ -30,7 +30,10 @@ public record AylikTrendResponse
 public record GetAylikTrendQuery(
     int? FirmaId = null,
     int Months = 12,
-    DashboardMode Mode = DashboardMode.Onayli
+    DashboardMode Mode = DashboardMode.Onayli,
+    DateTime? StartDate = null,
+    DateTime? EndDate = null,
+    DashboardFilters? Filters = null
 ) : IRequest<AylikTrendResponse>;
 
 // Handler
@@ -54,21 +57,38 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
     {
         var firmaId = request.FirmaId ?? _currentUserService.FirmaId;
         var now = _dateTimeService.Now;
-        var months = Math.Min(Math.Max(request.Months, 1), 24);
-        var startDate = new DateTime(now.Year, now.Month, 1).AddMonths(-(months - 1));
+        var filters = request.Filters ?? new DashboardFilters();
+
+        DateTime startDate;
+        int months;
+
+        if (request.StartDate.HasValue && request.EndDate.HasValue)
+        {
+            // Tarih aralığından ay sayısını hesapla
+            startDate = new DateTime(request.StartDate.Value.Year, request.StartDate.Value.Month, 1);
+            var endMonth = new DateTime(request.EndDate.Value.Year, request.EndDate.Value.Month, 1);
+            months = ((endMonth.Year - startDate.Year) * 12) + (endMonth.Month - startDate.Month) + 1;
+            months = Math.Min(Math.Max(months, 1), 24);
+        }
+        else
+        {
+            months = Math.Min(Math.Max(request.Months, 1), 24);
+            startDate = new DateTime(now.Year, now.Month, 1).AddMonths(-(months - 1));
+        }
 
         if (request.Mode == DashboardMode.Yakalama)
         {
-            return await GetYakalamaTrend(firmaId, startDate, months, cancellationToken);
+            return await GetYakalamaTrend(firmaId, startDate, months, filters, cancellationToken);
         }
 
-        return await GetOnayliTrend(firmaId, startDate, months, cancellationToken);
+        return await GetOnayliTrend(firmaId, startDate, months, filters, cancellationToken);
     }
 
     private async Task<AylikTrendResponse> GetOnayliTrend(
         int? firmaId,
         DateTime startDate,
         int months,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var policeQuery = _context.Policeler
@@ -78,6 +98,14 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
         {
             policeQuery = policeQuery.Where(p => p.FirmaId == firmaId.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.BransIds.Contains(p.PoliceTuruId));
+        if (filters.SubeIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SubeIds.Contains(p.SubeId));
+        if (filters.SirketIds.Count > 0)
+            policeQuery = policeQuery.Where(p => filters.SirketIds.Contains(p.SigortaSirketiId));
 
         var policeler = await policeQuery
             .Where(p => p.TanzimTarihi >= startDate)
@@ -108,6 +136,7 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
         int? firmaId,
         DateTime startDate,
         int months,
+        DashboardFilters filters,
         CancellationToken cancellationToken)
     {
         var yakalamaQuery = _context.YakalananPoliceler
@@ -117,6 +146,16 @@ public class GetAylikTrendQueryHandler : IRequestHandler<GetAylikTrendQuery, Ayl
         {
             yakalamaQuery = yakalamaQuery.Where(y => y.FirmaId == firmaId.Value);
         }
+
+        // Apply filters
+        if (filters.BransIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.BransIds.Contains(y.PoliceTuru));
+        if (filters.SubeIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SubeIds.Contains(y.SubeId));
+        if (filters.SirketIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.SirketIds.Contains(y.SigortaSirketi));
+        if (filters.KullaniciIds.Count > 0)
+            yakalamaQuery = yakalamaQuery.Where(y => filters.KullaniciIds.Contains(y.ProduktorId));
 
         var yakalananlar = await yakalamaQuery
             .Where(y => y.TanzimTarihi >= startDate)
